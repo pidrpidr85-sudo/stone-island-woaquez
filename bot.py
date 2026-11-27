@@ -39,10 +39,10 @@ seen = set()
 check_lock = asyncio.Lock()
 
 PRICE_PATTERNS = (
-    (r"€\\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\\s*€|\\bEUR\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "EUR"),
-    (r"\\$\\s*([0-9]+(?:[.,][0-9]{1,2})?)|\\bUSD\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "USD"),
-    (r"£\\s*([0-9]+(?:[.,][0-9]{1,2})?)|\\bGBP\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "GBP"),
-    (r"\\bCHF\\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\\s*CHF\\b", "CHF"),
+    (r"€\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\s*€|\bEUR\s*([0-9]+(?:[.,][0-9]{1,2})?)", "EUR"),
+    (r"\\$\s*([0-9]+(?:[.,][0-9]{1,2})?)|\bUSD\s*([0-9]+(?:[.,][0-9]{1,2})?)", "USD"),
+    (r"£\s*([0-9]+(?:[.,][0-9]{1,2})?)|\bGBP\s*([0-9]+(?:[.,][0-9]{1,2})?)", "GBP"),
+    (r"\bCHF\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\s*CHF\b", "CHF"),
 )
 
 
@@ -65,7 +65,7 @@ def save_json(path, value):
             "w", encoding="utf-8", dir=str(path.parent), delete=False
         ) as file:
             json.dump(value, file, ensure_ascii=False, indent=2)
-            file.write("\\n")
+            file.write("\n")
             temp_name = file.name
         os.replace(temp_name, path)
     except OSError:
@@ -80,7 +80,7 @@ def save_json(path, value):
 def clean_text(value):
     value = html.unescape(str(value or ""))
     value = re.sub(r"<[^>]+>", " ", value)
-    return re.sub(r"\\s+", " ", value).strip()
+    return re.sub(r"\s+", " ", value).strip()
 
 
 def extract_price(text):
@@ -169,9 +169,9 @@ def download_feed(url):
 
 async def send_item(bot, item):
     caption = (
-        f"🧥 {item['title']}\\n\\n"
+        f"🧥 {item['title']}\n\n"
         f"💰 {item['amount']:.2f} {item['currency']} "
-        f"(примерно {item['euros']:.2f} €)\\n\\n"
+        f"(примерно {item['euros']:.2f} €)\n\n"
         f"🔗 {item['link']}"
     )
     if not subscribers:
@@ -232,9 +232,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers.add(chat.id)
     save_json(SUBSCRIBERS_FILE, sorted(subscribers))
     await update.effective_message.reply_text(
-        "🏝 Stone Island Hunter включён!\\n\\n"
+        "🏝 Stone Island Hunter включён!\n\n"
         "Ищу Stone Island и C.P. Company до "
-        f"{MAX_EUR:.0f} €.\\n"
+        f"{MAX_EUR:.0f} €.\n"
         "Уведомления включены. Команды: /status, /check, /stop, /help."
     )
 
@@ -249,11 +249,11 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
-        "⚙️ Stone Island Hunter\\n"
-        "Бренды: Stone Island, C.P. Company\\n"
-        f"Максимальная цена: {MAX_EUR:.0f} €\\n"
-        f"RSS-источников: {len(FEED_URLS)}\\n"
-        f"Подписчиков: {len(subscribers)}\\n"
+        "⚙️ Stone Island Hunter\n"
+        "Бренды: Stone Island, C.P. Company\n"
+        f"Максимальная цена: {MAX_EUR:.0f} €\n"
+        f"RSS-источников: {len(FEED_URLS)}\n"
+        f"Подписчиков: {len(subscribers)}\n"
         f"Интервал проверки: {CHECK_INTERVAL // 60} мин."
     )
 
@@ -278,10 +278,10 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
-        "/start — включить уведомления\\n"
-        "/stop — отключить уведомления\\n"
-        "/status — настройки бота\\n"
-        "/check — проверить объявления сейчас\\n"
+        "/start — включить уведомления\n"
+        "/stop — отключить уведомления\n"
+        "/status — настройки бота\n"
+        "/check — проверить объявления сейчас\n"
         "/help — список команд"
     )
 
