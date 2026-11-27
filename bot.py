@@ -1,68 +1,4 @@
-import asyncio
-import html
-import logging
-import os
-import re
-import time
-import urllib.request
-import json
-
-import feedparser
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-)
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-MAX_EUR = 100.0
-CHECK_INTERVAL = 600
-
-FEED_URLS = [
-    url.strip()
-    for url in os.getenv("RSS_FEED_URLS", "").split(";")
-    if url.strip()
-]
-
-BRANDS = ("stone island", "c.p. company", "cp company")
-
-subscribers = set()
-seen = set()
-rates = {"EUR": 1.0}
-last_rate_update = 0
-
-
-def update_rates():
-    global rates, last_rate_update
-
-    try:
-        url = "https://api.frankfurter.app/latest?from=EUR"
-        request = urllib.request.Request(
-            url,
-            headers={"User-Agent": "StoneIslandHunter/1.0"}
-        )
-
-        with urllib.request.urlopen(request, timeout=15) as response:
-            data = json.loads(response.read().decode())
-
-        rates = {"EUR": 1.0, **data["rates"]}
-        last_rate_update = time.time()
-
-        logger.info("Exchange rates updated")
-
-    except Exception as error:
-        logger.warning("Could not update exchange rates: %s", error)
-
-
-def extract_text(entry):
-    parts = [
-        entry.get("title", ""),
-        entry.get("summary", ""),
-        entry.get("description", ""),
+entry.get("description", ""),
     ]
 
     for item in entry.get("content", []):
@@ -316,3 +252,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
