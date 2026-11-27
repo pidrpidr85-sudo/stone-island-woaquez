@@ -1,595 +1,337 @@
-import os
-
-import re
-
-import html
-
-import json
-
-import time
-
-import logging
-
 import asyncio
-
+import html
+import json
+import logging
+import os
+import re
+import tempfile
 import urllib.request
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
-import xml.etree.ElementTree as ET
-
+import feedparser
 from telegram import Update
-
-from telegram.ext import (
-
-    Application,
-
-    CommandHandler,
-
-    ContextTypes,
-
-)
+from telegram.constants import ChatType
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("stone_island_hunter")
 
-    level=logging.INFO,
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+MAX_EUR = float(os.getenv("MAX_PRICE_EUR", "100"))
+CHECK_INTERVAL = max(60, int(os.getenv("POLL_SECONDS", "600")))
+REQUEST_TIMEOUT = max(5, int(os.getenv("RSS_TIMEOUT_SECONDS", "20")))
+SUBSCRIBERS_FILE = Path(os.getenv("SUBSCRIBERS_FILE", "subscribers.json"))
+SEEN_FILE = Path(os.getenv("SEEN_FILE", "seen.json"))
 
-    format="%(asctime)s %(levelname)s %(message)s"
+BRANDS = ("stone island", "c.p. company", "cp company", "cp-company")
+FEED_URLS = [
+    value.strip()
+    for value in os.getenv("RSS_FEED_URLS", "").split(";")
+    if value.strip()
+]
+EUR_RATES = {"EUR": 1.0, "USD": 0.93, "GBP": 1.19, "CHF": 1.06}
+subscribers = set()
+seen = set()
+check_lock = asyncio.Lock()
 
+PRICE_PATTERNS = (
+    (r"€\\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\\s*€|\\bEUR\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "EUR"),
+    (r"\\$\\s*([0-9]+(?:[.,][0-9]{1,2})?)|\\bUSD\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "USD"),
+    (r"£\\s*([0-9]+(?:[.,][0-9]{1,2})?)|\\bGBP\\s*([0-9]+(?:[.,][0-9]{1,2})?)", "GBP"),
+    (r"\\bCHF\\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\\s*CHF\\b", "CHF"),
 )
 
-logger = logging.getLogger(__name__)
 
-TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-
-MAX_EUR = 100
-
-CHECK_INTERVAL = 600
-
-
-
-BRANDS = ["stone island", "c.p. company", "cp company"]
-
-FEED_URLS = [
-
-    url.strip()
-
-    for url in os.getenv("RSS_FEED_URLS", "").split(";")
-
-    if url.strip()
-
-]
-
-SUBSCRIBERS_FILE = "subscribers.json"
-
-SEEN_FILE = "seen.json"
-
-subscribers = set()
-
-seen = set()
-
-rates = {"EUR": 1.0, "USD": 1.08, "GBP": 0.84, "CHF": 0.94}
-
-def load_json(filename, default):
-
+def load_json(path, default):
     try:
-
-        with open(filename, "r", encoding="utf-8") as file:
-
+        with path.open("r", encoding="utf-8") as file:
             return json.load(file)
-
-    except Exception:
-
+    except FileNotFoundError:
+        return default
+    except (OSError, json.JSONDecodeError):
+        logger.exception("Не удалось прочитать %s; используются значения по умолчанию", path)
         return default
 
-def save_json(filename, data):
 
+def save_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name = None
     try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=str(path.parent), delete=False
+        ) as file:
+            json.dump(value, file, ensure_ascii=False, indent=2)
+            file.write("\\n")
+            temp_name = file.name
+        os.replace(temp_name, path)
+    except OSError:
+        logger.exception("Не удалось сохранить %s", path)
+        if temp_name:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
 
-        with open(filename, "w", encoding="utf-8") as file:
 
-            json.dump(data, file, ensure_ascii=False)
+def clean_text(value):
+    value = html.unescape(str(value or ""))
+    value = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\\s+", " ", value).strip()
 
-    except Exception:
-
-        logger.exception("Не удалось сохранить %s", filename)
-
-subscribers = set(load_json(SUBSCRIBERS_FILE, []))
-
-seen = set(load_json(SEEN_FILE, []))
-
-def download_feed(url):
-
-    request = urllib.request.Request(
-
-        url,
-
-        headers={"User-Agent": "StoneIslandHunter/1.0"}
-
-    )
-
-    with urllib.request.urlopen(request, timeout=20) as response:
-
-        return response.read()
 
 def extract_price(text):
-
-    patterns = [
-
-        (r"€\s*(\d+(?:[.,]\d{1,2})?)", "EUR"),
-
-        (r"(\d+(?:[.,]\d{1,2})?)\s*€", "EUR"),
-
-        (r"\bEUR\s*(\d+(?:[.,]\d{1,2})?)", "EUR"),
-
-        (r"\$\s*(\d+(?:[.,]\d{1,2})?)", "USD"),
-
-        (r"\bUSD\s*(\d+(?:[.,]\d{1,2})?)", "USD"),
-
-        (r"£\s*(\d+(?:[.,]\d{1,2})?)", "GBP"),
-
-        (r"\bGBP\s*(\d+(?:[.,]\d{1,2})?)", "GBP"),
-
-        (r"\bCHF\s*(\d+(?:[.,]\d{1,2})?)", "CHF"),
-
-        (r"(\d+(?:[.,]\d{1,2})?)\s*CHF\b", "CHF"),
-
-    ]
-
-    for pattern, currency in patterns:
-
-        match = re.search(pattern, text, re.I)
-
+    text = clean_text(text)
+    for pattern, currency in PRICE_PATTERNS:
+        match = re.search(pattern, text, re.IGNORECASE)
         if match:
-
-            return float(match.group(1).replace(",", ".")), currency
-
+            number = next((part for part in match.groups() if part), None)
+            if number:
+                try:
+                    return float(number.replace(",", ".")), currency
+                except ValueError:
+                    continue
     return None
 
 
+def normalize_link(link):
+    link = html.unescape(str(link or "")).strip()
+    if not link:
+        return ""
+    parts = urlsplit(link)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return ""
+    # Remove tracking parameters while preserving the actual listing path.
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def entry_text(entry):
+    chunks = [entry.get("title", ""), entry.get("summary", "")]
+    for item in entry.get("content", []) or []:
+        chunks.append(item.get("value", ""))
+    return clean_text(" ".join(str(chunk or "") for chunk in chunks))
+
+
 def get_image(entry):
+    for item in entry.get("media_thumbnail", []) or []:
+        url = item.get("url")
+        if url and str(url).startswith(("http://", "https://")):
+            return str(url)
+    for item in entry.get("media_content", []) or []:
+        url = item.get("url")
+        if url and str(url).startswith(("http://", "https://")):
+            return str(url)
+    for item in entry.get("links", []) or []:
+        if item.get("rel") == "enclosure" and str(item.get("type", "")).startswith("image/"):
+            url = item.get("href")
+            if url:
+                return str(url)
+    return None
 
-    for child in entry.iter():
-
-        tag = child.tag.lower().split("}")[-1]
-
-        if tag in ("thumbnail", "content", "enclosure"):
-
-            url = child.attrib.get("url") or child.attrib.get("href")
-
-            if url and url.startswith("http"):
-
-                return url
-
-    description = " ".join(
-
-        child.text or ""
-
-        for child in entry.iter()
-
-    )
-
-    match = re.search(
-
-        r'<img[^>]+src=["\']([^"\']+)',
-
-        description,
-
-        re.I
-
-    )
-
-    return match.group(1) if match else None
 
 def matching_item(entry):
-
-    title = ""
-
-    link = ""
-
-    for child in entry:
-
-        tag = child.tag.lower().split("}")[-1]
-
-        if tag == "title":
-
-            title = child.text or ""
-
-        elif tag == "link":
-
-            link = child.attrib.get("href") or child.text or ""
-
-    title_lower = title.lower()
-
-    if not any(brand in title_lower for brand in BRANDS):
-
+    title = clean_text(entry.get("title", "Без названия"))
+    description = entry_text(entry)
+    searchable = (title + " " + description).lower()
+    if not any(brand in searchable for brand in BRANDS):
         return None
 
-    description = " ".join(
-
-        child.text or ""
-
-        for child in entry.iter()
-
-    )
-
-    price_data = extract_price(description)
-
+    price_data = extract_price(title + " " + description)
     if not price_data:
-
-        price_data = extract_price(title)
-
-    if not price_data:
-
         return None
 
     amount, currency = price_data
-
-    euro_rates = {
-
-        "EUR": 1.0,
-
-        "USD": 0.93,
-
-        "GBP": 1.19,
-
-        "CHF": 1.06,
-
-    }
-
-    euros = amount * euro_rates[currency]
-
-    if euros > MAX_EUR or not link:
-
+    euros = amount * EUR_RATES[currency]
+    link = normalize_link(entry.get("link"))
+    if euros > MAX_EUR or not link or amount <= 0:
         return None
 
     return {
-
-        "title": title,
-
+        "title": title[:250],
         "amount": amount,
-
         "currency": currency,
-
         "euros": euros,
-
         "link": link,
-
         "image": get_image(entry),
-
     }
 
-async def send_item(bot, item):
 
-    caption = (
-
-        f"🧥 {item['title']}\n\n"
-
-        f"💰 {item['amount']:.2f} {item['currency']}\n"
-
-        f"≈ {item['euros']:.2f} €\n\n"
-
-        f"🔗 {item['link']}"
-
+def download_feed(url):
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "StoneIslandHunter/2.0 (+RSS reader)"}
     )
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+        return response.read()
 
-    for chat_id in list(subscribers):
 
+async def send_item(bot, item):
+    caption = (
+        f"🧥 {item['title']}\\n\\n"
+        f"💰 {item['amount']:.2f} {item['currency']} "
+        f"(примерно {item['euros']:.2f} €)\\n\\n"
+        f"🔗 {item['link']}"
+    )
+    if not subscribers:
+        return True
+
+    delivered = 0
+    for chat_id in tuple(subscribers):
         try:
-
-            if item["image"]:
-
-                await bot.send_photo(
-
-                    chat_id=chat_id,
-
-                    photo=item["image"],
-
-                    caption=caption
-
-                )
-
+            if item.get("image"):
+                try:
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=item["image"],
+                        caption=caption[:1024],
+                    )
+                except Exception:
+                    logger.warning("Не удалось отправить фото; отправляю текст", exc_info=True)
+                    await bot.send_message(chat_id=chat_id, text=caption)
             else:
-
-                await bot.send_message(
-
-                    chat_id=chat_id,
-
-                    text=caption
-
-                )
-
+                await bot.send_message(chat_id=chat_id, text=caption)
+            delivered += 1
         except Exception:
+            logger.exception("Не удалось отправить объявление пользователю %s", chat_id)
+    return delivered > 0
 
-            logger.exception("Ошибка отправки объявления")
 
 async def check_feeds(bot):
-
     if not FEED_URLS:
-
         return 0
 
-    found = 0
+    async with check_lock:
+        found = 0
+        for url in FEED_URLS:
+            try:
+                raw = await asyncio.to_thread(download_feed, url)
+                parsed = feedparser.parse(raw)
+                if parsed.bozo:
+                    logger.warning("RSS вернул предупреждение для %s: %s", url, parsed.bozo_exception)
 
-    for url in FEED_URLS:
+                for entry in parsed.entries:
+                    item = matching_item(entry)
+                    if not item or item["link"] in seen:
+                        continue
+                    if await send_item(bot, item):
+                        seen.add(item["link"])
+                        save_json(SEEN_FILE, sorted(seen)[-5000:])
+                        found += 1
+            except Exception:
+                logger.exception("Ошибка обработки RSS-источника %s", url)
+        return found
 
-        try:
-
-            data = await asyncio.to_thread(download_feed, url)
-
-            root = ET.fromstring(data)
-
-            for entry in root.iter():
-
-                tag = entry.tag.lower().split("}")[-1]
-
-                if tag not in ("item", "entry"):
-
-                    continue
-
-                item = matching_item(entry)
-
-                if not item or item["link"] in seen:
-
-                    continue
-
-                seen.add(item["link"])
-
-                save_json(SEEN_FILE, list(seen)[-5000:])
-
-                await send_item(bot, item)
-
-                found += 1
-
-        except Exception:
-
-            logger.exception("Ошибка RSS: %s", url)
-
-    return found
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    chat_id = update.effective_chat.id
-
-    subscribers.add(chat_id)
-
-    save_json(SUBSCRIBERS_FILE, list(subscribers))
-
-    await update.message.reply_text(
-
-        "🏝 Stone Island Hunter запущен!\n\n"
-
-        "Ищу Stone Island и C.P. Company.\n"
-
-        "Бюджет: до 100 €.\n"
-
-        "Команды: /status /check /help"
-
+    chat = update.effective_chat
+    if not chat or chat.type != ChatType.PRIVATE:
+        await update.effective_message.reply_text("Открой личный чат с ботом и отправь /start.")
+        return
+    subscribers.add(chat.id)
+    save_json(SUBSCRIBERS_FILE, sorted(subscribers))
+    await update.effective_message.reply_text(
+        "🏝 Stone Island Hunter включён!\\n\\n"
+        "Ищу Stone Island и C.P. Company до "
+        f"{MAX_EUR:.0f} €.\\n"
+        "Уведомления включены. Команды: /status, /check, /stop, /help."
     )
+
+
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat:
+        subscribers.discard(chat.id)
+        save_json(SUBSCRIBERS_FILE, sorted(subscribers))
+    await update.effective_message.reply_text("Уведомления отключены. Чтобы включить снова, отправь /start.")
+
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    await update.message.reply_text(
-
-        f"Бренды: Stone Island, C.P. Company\n"
-
-        f"Бюджет: {MAX_EUR} €\n"
-
-        f"RSS-источников: {len(FEED_URLS)}"
-
+    await update.effective_message.reply_text(
+        "⚙️ Stone Island Hunter\\n"
+        "Бренды: Stone Island, C.P. Company\\n"
+        f"Максимальная цена: {MAX_EUR:.0f} €\\n"
+        f"RSS-источников: {len(FEED_URLS)}\\n"
+        f"Подписчиков: {len(subscribers)}\\n"
+        f"Интервал проверки: {CHECK_INTERVAL // 60} мин."
     )
+
 
 async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    message = await update.message.reply_text(
-
-        "🔎 Проверка запущена..."
-
-    )
-
+    message = await update.effective_message.reply_text("🔎 Проверяю подключённые RSS-источники...")
     if not FEED_URLS:
-
         await message.edit_text(
-
-            "⚠️ RSS-источники не подключены.\n"
-
-            "Нужно добавить RSS_FEED_URLS в Railway Variables."
-
+            "⚠️ RSS-источники не подключены. Добавь RSS_FEED_URLS в Railway Variables "
+            "(несколько адресов разделяются точкой с запятой)."
         )
-
         return
-
     try:
-
-        found = await asyncio.wait_for(
-
-            check_feeds(context.bot),
-
-            timeout=90
-
-        )
-
-        await message.edit_text(
-
-            f"✅ Проверка завершена.\n"
-
-            f"Найдено новых объявлений: {found}"
-
-        )
-
+        found = await asyncio.wait_for(check_feeds(context.bot), timeout=120)
+        await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.")
     except asyncio.TimeoutError:
+        await message.edit_text("⌛ Проверка не уложилась в 120 секунд. Посмотри логи Railway.")
+    except Exception:
+        logger.exception("Ошибка команды /check")
+        await message.edit_text("❌ Ошибка проверки. Подробности записаны в логи Railway.")
 
-        await message.edit_text("Проверка заняла больше 90 секунд.")
-
-    except Exception as error:
-
-        logger.exception("Ошибка /check")
-
-        await message.edit_text(f"Ошибка: {str(error)[:200]}")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    await update.message.reply_text(
-
-        "/start — включить уведомления\n"
-
-        "/status — настройки\n"
-
-        "/check — проверить объявления\n"
-
-        "/help — помощь"
-
+    await update.effective_message.reply_text(
+        "/start — включить уведомления\\n"
+        "/stop — отключить уведомления\\n"
+        "/status — настройки бота\\n"
+        "/check — проверить объявления сейчас\\n"
+        "/help — список команд"
     )
+
 
 async def scheduled_check(application):
-
     while True:
-
         try:
-
-            await check_feeds(application.bot)
-
+            found = await check_feeds(application.bot)
+            if found:
+                logger.info("Автоматическая проверка: отправлено новых объявлений: %s", found)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-
             logger.exception("Ошибка автоматической проверки")
-
         await asyncio.sleep(CHECK_INTERVAL)
 
+
 async def post_init(application):
-
-    logger.info("Stone Island Hunter запущен")
-
+    logger.info(
+        "Бот запущен. RSS=%s, подписчиков=%s, лимит=%.2f EUR, интервал=%ss",
+        len(FEED_URLS), len(subscribers), MAX_EUR, CHECK_INTERVAL,
+    )
     application.create_task(scheduled_check(application))
 
+
 def main():
+    if not TOKEN:
+        raise RuntimeError("Не задана переменная окружения TELEGRAM_BOT_TOKEN в Railway Variables.")
+    if MAX_EUR <= 0:
+        raise RuntimeError("MAX_PRICE_EUR должен быть больше нуля.")
+    subscribers.update(int(value) for value in load_json(SUBSCRIBERS_FILE, []) if str(value).lstrip("-").isdigit())
+    seen.update(str(value) for value in load_json(SEEN_FILE, []) if value)
+    for url in FEED_URLS:
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            raise RuntimeError("RSS_FEED_URLS содержит некорректный адрес.")
 
     application = (
-
         Application.builder()
-
         .token(TOKEN)
-
         .post_init(post_init)
-
         .build()
-
     )
-
     application.add_handler(CommandHandler("start", start))
-
+    application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("status", status))
-
     application.add_handler(CommandHandler("check", check_now))
-
     application.add_handler(CommandHandler("help", help_command))
+    application.run_polling(drop_pending_updates=True)
 
-    application.run_polling()
 
 if __name__ == "__main__":
-
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
