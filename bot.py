@@ -458,20 +458,19 @@ def is_off_dye_keyword_spam(title, query):
 def clean_kufar_title(title):
     title = html.unescape(str(title or "")).strip()
     title = re.sub(
-        r"\s*[,|]\s*цена\s+.*?\s+купить\s+в\s+.*?\s+на\s+Куфаре\s*[-–—]?\s*$",
+        r"\s*[-–—]?\s*Объявление\s*№\s*\d+\s*$",
         "",
         title,
         flags=re.IGNORECASE,
     )
     title = re.sub(
-        r"\s*[-–—]?\s*Объявление\s*№\s*\d+\s*$",
+        r"\s*[,|]\s*цена\s+.*?\s+купить\s+в\s+.*?\s+на\s+Куфаре\s*[-–—]?\s*$",
         "",
         title,
         flags=re.IGNORECASE,
     )
     title = re.sub(r"\s*№\s*\d+\b", "", title)
     return re.sub(r"\s+", " ", title).strip(" -–—,|")
-
 
 def kufar_price(meta, page_text=""):
     amount = meta.get("product:price:amount")
