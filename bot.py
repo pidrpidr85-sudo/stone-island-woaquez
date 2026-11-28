@@ -26,6 +26,9 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 MAX_EUR = float(os.getenv("MAX_PRICE_EUR", "100"))
 CHECK_INTERVAL = max(60, int(os.getenv("POLL_SECONDS", "600")))
 REQUEST_TIMEOUT = max(5, int(os.getenv("RSS_TIMEOUT_SECONDS", "20")))
+KUFAR_MAX_CHECKS = min(100, max(1, int(os.getenv("KUFAR_MAX_CHECKS", "30"))))
+KUFAR_MAX_RESULTS = min(20, max(1, int(os.getenv("KUFAR_MAX_RESULTS", "10"))))
+KUFAR_CONCURRENCY = min(8, max(1, int(os.getenv("KUFAR_CONCURRENCY", "5"))))
 SUBSCRIBERS_FILE = Path(os.getenv("SUBSCRIBERS_FILE", "subscribers.json"))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", "seen.json"))
 
@@ -328,7 +331,26 @@ class KufarMetaParser(HTMLParser):
 
 
 
+def normalize_kufar_item_link(value):
+    value = html.unescape(str(value or "")).strip()
+    if value.startswith("//"):
+        value = "https:" + value
+    elif value.startswith("/"):
+        value = "https://www.kufar.by" + value
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        return ""
+    if (parts.hostname or "").lower() not in ("kufar.by", "www.kufar.by"):
+        return ""
+    if not re.fullmatch(r"/item/\\d+/?", parts.path):
+        return ""
+    return urlunsplit(("https", "www.kufar.by", parts.path.rstrip("/"), "", ""))
+
+
 def fetch_kufar_page(url):
+    parts = urlsplit(url)
+    if (parts.hostname or "").lower() not in ("kufar.by", "www.kufar.by"):
+        raise ValueError("Разрешены только публичные страницы kufar.by")
     request = urllib.request.Request(
         url,
         headers={
@@ -344,15 +366,12 @@ def fetch_kufar_page(url):
         parser.feed(page)
         item_links = []
         for href in parser.links:
-            if re.search(r"/item/\d+", href):
-                if href.startswith("/"):
-                    href = "https://www.kufar.by" + href
-                link = normalize_link(href)
-                if link and link not in item_links:
-                    item_links.append(link)
-        for path in re.findall(r"/item/\d+", page):
-            link = "https://www.kufar.by" + path
-            if link not in item_links:
+            link = normalize_kufar_item_link(href)
+            if link and link not in item_links:
+                item_links.append(link)
+        for path in re.findall(r"/item/\\d+", page):
+            link = normalize_kufar_item_link(path)
+            if link and link not in item_links:
                 item_links.append(link)
         return {
             "status": getattr(response, "status", 200),
@@ -360,9 +379,8 @@ def fetch_kufar_page(url):
             "bytes": len(raw),
             "meta": parser.meta,
             "page_text": " ".join(parser.text_parts)[:120000],
-            "item_links": item_links[:30],
+            "item_links": item_links[:KUFAR_MAX_CHECKS],
         }
-
 
 
 async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -445,6 +463,17 @@ BELARUS_CITY_FORMS = {
     "молодечно": ("Молодечно", r"Молодечн(?:о|е)"),
     "жодино": ("Жодино", r"Жодино"),
     "солигорск": ("Солигорск", r"Солигорск(?:е|а|у|ом)?"),
+    "лида": ("Лида", r"Лид(?:а|е|ы|у|ой)"),
+    "новополоцк": ("Новополоцк", r"Новополоцк(?:е|а|у|ом)?"),
+    "полоцк": ("Полоцк", r"Полоцк(?:е|а|у|ом)?"),
+    "слуцк": ("Слуцк", r"Слуцк(?:е|а|у|ом)?"),
+    "мозырь": ("Мозырь", r"Мозыр(?:ь|е|я|ю|ем)"),
+    "речица": ("Речица", r"Речиц(?:а|е|ы|у|ей)"),
+    "жлобин": ("Жлобин", r"Жлобин(?:е|а|у|ом)?"),
+    "светлогорск": ("Светлогорск", r"Светлогорск(?:е|а|у|ом)?"),
+    "волковыск": ("Волковыск", r"Волковыск(?:е|а|у|ом)?"),
+    "сморгонь": ("Сморгонь", r"Сморгон(?:ь|и|ью)"),
+    "осиповичи": ("Осиповичи", r"Осипович(?:и|ах|ам|ами)"),
 }
 
 
@@ -463,46 +492,20 @@ def parse_natural_search(raw_text):
     if requested_city:
         for canonical, pattern in BELARUS_CITY_FORMS.values():
             if canonical == requested_city:
-                text = re.sub(r"(?<![а-я])" + pattern + r"(?![а-я])", " ", text, flags=re.IGNORECASE)
-                break
-    days = None
-    day_match = re.search(
-        r"\b(?:на\s*)?(один|одну|два|две|три|четыре|пять|[1-9]\d*)\s*(?:день|дня|дней|сутки|суток)\b",
-        text,
-        re.IGNORECASE,
-    )
-    if day_match:
-        day_word = day_match.group(1).lower()
-        day_numbers = {
-            "один": 1, "одну": 1, "два": 2, "две": 2,
-            "три": 3, "четыре": 4, "пять": 5,
-        }
-        days = day_numbers.get(day_word)
-        if days is None:
-            try:
-                days = int(day_word)
-            except ValueError:
-                days = None
-        text = text[:day_match.start()] + " " + text[day_match.end():]
-
-    budget = None
-    budget_match = re.search(
-        r"\b(?:до|максимум|бюджет(?:ом)?\s*)\s*([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\b",
-        text,
-        re.IGNORECASE,
-    )
-    if budget_match:
-        try:
-            budget = float(re.sub(r"\s+", "", budget_match.group(1)).replace(",", "."))
-            text = text[:budget_match.start()] + " " + text[budget_match.end():]
-        except ValueError:
-            budget = None
-
-    text = re.sub(
+                text = re.sub(
         r"\b(?:найди|найти|ищи|поискать|подбери|подобрать|сними|снять|покажи|показать)\b",
         " ", text, flags=re.IGNORECASE,
     )
+    text = re.sub(
+        r"\b(?:мне|пожалуйста|объявления?|варианты|в городе|городе|по всей беларуси|всей беларуси)\b",
+        " ", text, flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\b(?:любая цена|любую цену|любой ценой|без ограничений(?: по цене)?|без лимита(?: по цене)?)\b",
+        " ", text, flags=re.IGNORECASE,
+    )
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
+
     return text, budget, days, requested_city
 
 
@@ -543,82 +546,115 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
 
         sent = 0
         checked = 0
-        skipped = 0
+        skipped_city = 0
+        skipped_budget = 0
+        unknown_price = 0
+        fetch_errors = 0
         daily_limit = (
             max_budget / duration_days
             if max_budget is not None and duration_days and duration_days > 1
             else max_budget
         )
-        for link in links[:30]:
-            if sent >= 10:
+
+        async def inspect_listing(link, semaphore):
+            async with semaphore:
+                try:
+                    page = await asyncio.to_thread(fetch_kufar_page, link)
+                    meta = page.get("meta", {})
+                    page_text = page.get("page_text", "")
+                    return {
+                        "link": link,
+                        "title": meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar",
+                        "image": meta.get("og:image"),
+                        "price": kufar_price(meta, page_text),
+                        "city": kufar_city(meta, page_text),
+                        "error": None,
+                    }
+                except Exception as exc:
+                    logger.warning("Не удалось проверить объявление %s: %s", link, exc)
+                    return {"link": link, "error": exc}
+
+        links_to_check = links[:KUFAR_MAX_CHECKS]
+        semaphore = asyncio.Semaphore(KUFAR_CONCURRENCY)
+        inspected = await asyncio.gather(
+            *(inspect_listing(link, semaphore) for link in links_to_check)
+        )
+
+        for item in inspected:
+            if sent >= KUFAR_MAX_RESULTS:
                 break
-            try:
-                page = await asyncio.to_thread(fetch_kufar_page, link)
-                meta = page.get("meta", {})
-                title = meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"
-                image_url = meta.get("og:image")
-                page_text = page.get("page_text", "")
-                price = kufar_price(meta, page_text)
-                city = kufar_city(meta, page_text)
-                checked += 1
+            if item.get("error"):
+                fetch_errors += 1
+                continue
+            checked += 1
+            link = item["link"]
+            title = item["title"]
+            image_url = item["image"]
+            price = item["price"]
+            city = item["city"]
 
-                # If a city was explicitly requested, never show listings from another city
-                # or listings whose location could not be established from the public page.
-                if requested_city and city != requested_city:
-                    skipped += 1
-                    continue
+            # A requested city must be confirmed by the public listing page.
+            if requested_city and city != requested_city:
+                skipped_city += 1
+                continue
 
-                if daily_limit is not None and price:
-                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price)
-                    if amount_match:
-                        amount = float(amount_match.group(1).replace(",", "."))
-                        if amount > daily_limit:
-                            skipped += 1
-                            continue
+            if daily_limit is not None and price:
+                amount_match = re.search(r"([0-9][0-9 ]*(?:[.,][0-9]{1,2})?)", price)
+                if amount_match:
+                    amount = float(amount_match.group(1).replace(" ", "").replace(",", "."))
+                    if amount > daily_limit:
+                        skipped_budget += 1
+                        continue
+            elif daily_limit is not None and not price:
+                unknown_price += 1
 
-                caption_parts = [f"📌 {title[:220]}"]
-                caption_parts.append(f"📍 {city or 'Город не указан'}")
+            caption_parts = [f"📌 {title[:220]}"]
+            caption_parts.append(f"📍 {city or 'Город не указан'}")
+            caption_parts.append(
+                f"💰 {price}" if price else
+                "💰 Цена не указана — проверь бюджет по ссылке у продавца"
+            )
+            if duration_days and max_budget is not None:
                 caption_parts.append(
-                    f"💰 {price}" if price else
-                    "💰 Цена не указана — соответствие бюджету нужно уточнить у продавца"
+                    f"🗓 {duration_days} дн. · бюджет до {max_budget:g} BYN всего"
                 )
-                if duration_days and max_budget is not None:
-                    caption_parts.append(
-                        f"🗓 {duration_days} дн. · бюджет до {max_budget:g} BYN всего"
+            caption = "\n\n".join(caption_parts)
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Открыть объявление на Kufar", url=link)]]
+            )
+            if image_url and image_url.startswith(("https://", "http://")):
+                try:
+                    await update.effective_message.reply_photo(
+                        photo=image_url,
+                        caption=caption[:1024],
+                        reply_markup=keyboard,
                     )
-                caption = "\n\n".join(caption_parts)
-                keyboard = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("Открыть объявление на Kufar", url=link)]]
-                )
-                if image_url and image_url.startswith(("https://", "http://")):
-                    try:
-                        await update.effective_message.reply_photo(
-                            photo=image_url,
-                            caption=caption[:1024],
-                            reply_markup=keyboard,
-                        )
-                    except Exception:
-                        logger.warning("Не удалось отправить фото Kufar; отправляю текст", exc_info=True)
-                        await update.effective_message.reply_text(
-                            caption[:4000], reply_markup=keyboard
-                        )
-                else:
+                except Exception:
+                    logger.warning("Не удалось отправить фото Kufar; отправляю текст", exc_info=True)
                     await update.effective_message.reply_text(
                         caption[:4000], reply_markup=keyboard
                     )
-                sent += 1
-            except Exception:
-                logger.exception("Не удалось получить объявление Kufar: %s", link)
+            else:
+                await update.effective_message.reply_text(
+                    caption[:4000], reply_markup=keyboard
+                )
+            sent += 1
 
         summary = (
             f"✅ Поиск завершён.\n"
             f"Карточек отправлено: {sent}.\n"
             f"Объявлений проверено: {checked} из {len(links)} найденных ссылок."
         )
+        if requested_city:
+            summary += f"\nГород не удалось подтвердить или он не совпал: {skipped_city}."
         if daily_limit is not None:
-            summary += f"\nОтсеяно по бюджету или без цены: {skipped}."
+            summary += f"\nОтсеяно из-за превышения бюджета: {skipped_budget}."
+            summary += f"\nС неизвестной ценой показано: {unknown_price}."
         else:
             summary += "\nОграничения по цене нет."
+        if fetch_errors:
+            summary += f"\nНе удалось загрузить карточки: {fetch_errors}."
+        summary += f"\nПроверено ссылок: {len(links_to_check)}; параллельных загрузок: {KUFAR_CONCURRENCY}."
         summary += f"\nВсе результаты: {search_url}"
         await progress.edit_text(summary)
     except Exception as exc:
@@ -653,7 +689,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Максимальная цена: {MAX_EUR:.0f} €\n"
         f"RSS-источников: {len(FEED_URLS)}\n"
         f"Подписчиков: {len(subscribers)}\n"
-        f"Интервал проверки: {CHECK_INTERVAL // 60} мин."
+        f"Интервал проверки: {CHECK_INTERVAL // 60} мин.\n"
+        f"Kufar: до {KUFAR_MAX_CHECKS} проверок, максимум {KUFAR_MAX_RESULTS} карточек."
     )
 
 
