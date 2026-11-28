@@ -1,35 +1,61 @@
-# Stone Island Hunter
+# Stone Island Hunter / WOAQUEZ Finder
 
-Telegram bot for finding second-hand Stone Island and C.P. Company listings from RSS feeds.
+Telegram-бот для поиска объявлений на Kufar и уведомлений из подключённых RSS/Atom-лент.
 
-## Features
+## Поиск на Kufar обычным сообщением
 
-- Telegram commands: `/start`, `/stop`, `/status`, `/check`, and `/help`.
-- RSS and Atom feed parsing.
-- Brand matching in listing titles and descriptions.
-- Price filtering with a configurable EUR budget.
-- EUR, USD, GBP, and CHF price recognition (foreign-currency conversions are approximate fixed rates).
-- Sends matching listings with a link and an image when the feed provides one.
-- Persistent subscriber and seen-listing files to reduce duplicate notifications.
-- Automatic checks at a configurable interval.
+Пиши боту так, как попросил бы человека:
 
-## Railway variables
+- «Найди Stone Island Off Dye в Минске»
+- «Сними квартиру посуточно до 250 BYN на два дня»
+- «Найди кроссовки по всей Беларуси, любая цена»
 
-| Variable | Required | Default | Description |
+Бот пытается определить город, бюджет и длительность аренды, затем присылает карточки с названием, городом, ценой и ссылкой на объявление. Если публичная страница не раскрывает цену, бот не выдумывает её и помечает как неизвестную. Если город указан в запросе, бот показывает только объявления, для которых смог подтвердить этот город.
+
+### Настройки поиска Kufar
+
+| Переменная | По умолчанию | Назначение |
+|---|---:|---|
+| `KUFAR_MAX_CHECKS` | `30` | Максимум объявлений, которые бот проверяет за один поиск (1–100). |
+| `KUFAR_MAX_RESULTS` | `10` | Максимум карточек в ответе (1–20). |
+| `KUFAR_CONCURRENCY` | `5` | Сколько публичных страниц проверяется одновременно (1–8). |
+| `RSS_TIMEOUT_SECONDS` | `20` | Тайм-аут сетевого запроса в секундах. |
+
+Поиск использует обычные публичные HTML-страницы Kufar. Доступность полей, выдача и ограничения площадки могут меняться; бот не обходит защиту Kufar и не гарантирует, что каждое объявление будет доступно для автоматического чтения.
+
+## RSS-уведомления
+
+- Команды: `/start`, `/stop`, `/status`, `/check`, `/help`.
+- RSS/Atom-источники задаются в `RSS_FEED_URLS`, адреса разделяются точкой с запятой.
+- Поддерживаются Stone Island и C.P. Company.
+- Лимит RSS-уведомлений задаётся через `MAX_PRICE_EUR` (по умолчанию 100 EUR).
+- Интервал автоматической проверки задаётся через `POLL_SECONDS` (по умолчанию 600 секунд).
+
+## Переменные Railway
+
+| Переменная | Обязательная | По умолчанию | Описание |
 |---|---:|---:|---|
-| `TELEGRAM_BOT_TOKEN` | Yes | — | Bot token from BotFather. Keep it private. |
-| `RSS_FEED_URLS` | No | empty | RSS/Atom feed URLs separated by semicolons. |
-| `MAX_PRICE_EUR` | No | `100` | Maximum listing price converted to EUR. |
-| `POLL_SECONDS` | No | `600` | Automatic check interval; minimum 60 seconds. |
-| `RSS_TIMEOUT_SECONDS` | No | `20` | Network timeout for each feed. |
-| `LOG_LEVEL` | No | `INFO` | Logging level. |
+| `TELEGRAM_BOT_TOKEN` | Да | — | Токен Telegram-бота. Не публикуй его. |
+| `RSS_FEED_URLS` | Нет | пусто | RSS/Atom URL через точку с запятой. |
+| `MAX_PRICE_EUR` | Нет | `100` | Максимальная цена RSS-объявления в EUR. |
+| `POLL_SECONDS` | Нет | `600` | Интервал RSS-проверки; минимум 60 секунд. |
+| `RSS_TIMEOUT_SECONDS` | Нет | `20` | Тайм-аут сетевых запросов. |
+| `KUFAR_MAX_CHECKS` | Нет | `30` | Сколько ссылок Kufar проверять за поиск. |
+| `KUFAR_MAX_RESULTS` | Нет | `10` | Сколько карточек отправлять за поиск. |
+| `KUFAR_CONCURRENCY` | Нет | `5` | Параллельная загрузка страниц Kufar. |
+| `LOG_LEVEL` | Нет | `INFO` | Уровень логирования. |
 
-## Run
+## Запуск
 
-Deploy the repository on Railway using the included Dockerfile. After deployment, open the bot in Telegram and send `/start`. Use `/check` to run a manual check and `/status` to inspect the active configuration.
+Проект запускается через Dockerfile на Railway. После успешного деплоя открой бота в Telegram и отправь `/start`.
 
-## Important limitations
+## Автоматические проверки
 
-The bot only searches feeds explicitly supplied in `RSS_FEED_URLS`; it does not crawl every marketplace or search the whole internet. Add legitimate RSS/Atom feeds from marketplaces that provide them and comply with their terms. Some marketplaces do not provide public feeds or restrict automated access.
+GitHub Actions проверяет синтаксис Python и запускает unit-тесты при push в `main` и при pull request.
 
-Currency conversion rates are approximate constants in `bot.py`, not live exchange rates. A listing's authenticity cannot be established from its title or feed description; always inspect the seller's listing yourself.
+## Ограничения
+
+- Kufar может менять HTML-разметку, а часть объявлений может быть недоступна для чтения. Если площадка не отдаёт цену или город, бот явно сообщает об этом.
+- RSS-уведомления работают только с лентами, которые указаны в `RSS_FEED_URLS`; это не полный поиск по всем маркетплейсам.
+- Курсы валют для RSS — приблизительные фиксированные значения.
+- По карточке объявления нельзя достоверно подтвердить подлинность вещи; проверяй продавца и само объявление.
