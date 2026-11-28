@@ -76,7 +76,7 @@
     const shown = items.filter(x => (x.title + " " + x.city + " " + x.price).toLowerCase().includes(q));
     count.textContent = items.length + " сохранено";
     if (!shown.length) {
-      list.innerHTML = '<div class="empty"><strong>' + (items.length ? "Ничего не найдено" : "Пока здесь пусто") + '</strong>' + (items.length ? "Попробуй изменить запрос." : "Нажимай ❤️ «В избранное» на карточках Kufar — объявления появятся здесь.") + '</div>';
+      list.innerHTML = '<div class="empty"><strong>' + (items.length ? "Ничего не найдено" : "Пока здесь пусто") + '</strong>' + (items.length ? "Попробуй изменить запрос." : "Нажимай 🏝️ «В избранное» на карточках Kufar — объявления появятся здесь.") + '</div>';
       return;
     }
     list.innerHTML = shown.map(x => '<article class="card">' +
