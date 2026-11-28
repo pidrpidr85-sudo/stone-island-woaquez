@@ -1,5 +1,6 @@
 import asyncio
 import html
+from html.parser import HTMLParser
 import json
 import logging
 import os
@@ -287,6 +288,80 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("Уведомления отключены. Чтобы включить снова, отправь /start.")
 
 
+
+class KufarMetaParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.meta = {}
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "meta":
+            return
+        values = {key.lower(): value for key, value in attrs if key and value}
+        key = values.get("property") or values.get("name")
+        value = values.get("content")
+        if key and value:
+            self.meta[key.lower()] = clean_text(value)
+
+
+def fetch_kufar_page(url):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; StoneIslandHunter/1.0)",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ru,en;q=0.8",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+        raw = response.read(2_000_000)
+        parser = KufarMetaParser()
+        parser.feed(raw.decode("utf-8", errors="replace"))
+        return {
+            "status": getattr(response, "status", 200),
+            "content_type": response.headers.get("Content-Type", ""),
+            "bytes": len(raw),
+            "meta": parser.meta,
+        }
+
+
+async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = await update.effective_message.reply_text(
+        "🔎 Проверяю доступность Kufar из среды бота..."
+    )
+    pages = [
+        ("Объявление", "https://www.kufar.by/item/1097455335"),
+        ("Поиск по всей Беларуси", "https://www.kufar.by/listings?query=stone+island+off+dye&rgn=all"),
+    ]
+    lines = ["🧪 Проверка Kufar"]
+    for label, url in pages:
+        try:
+            result = await asyncio.to_thread(fetch_kufar_page, url)
+            meta = result["meta"]
+            lines.append(
+                f"\n{label}: HTTP {result['status']}, "
+                f"{result['bytes']} байт, {result['content_type'][:60]}"
+            )
+            for key, title in (
+                ("og:title", "Название"),
+                ("og:image", "Фото"),
+                ("og:description", "Описание"),
+                ("product:price:amount", "Цена"),
+                ("product:price:currency", "Валюта"),
+            ):
+                value = meta.get(key)
+                if value:
+                    lines.append(f"{title}: {value[:350]}")
+            if not any(meta.get(key) for key in ("og:title", "og:image", "product:price:amount")):
+                lines.append("Карточные метаданные в HTML не найдены.")
+        except urllib.error.HTTPError as exc:
+            lines.append(f"\n{label}: Kufar ответил HTTP {exc.code}.")
+        except Exception as exc:
+            lines.append(f"\n{label}: ошибка {type(exc).__name__}: {str(exc)[:180]}")
+    lines.append("\nЭто только проверка обычного публичного доступа; обход защиты не выполняется.")
+    await message.edit_text("\n".join(lines))
+
+
 async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args).strip()
     if not query:
@@ -411,6 +486,7 @@ def main():
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("check", check_now))
     application.add_handler(CommandHandler("search", search_kufar))
+    application.add_handler(CommandHandler("testkufar", test_kufar))
     application.add_handler(CommandHandler("help", help_command))
     application.run_polling(drop_pending_updates=True)
 
