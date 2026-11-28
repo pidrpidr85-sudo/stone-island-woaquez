@@ -125,7 +125,7 @@
     const q = filter.value.trim().toLowerCase();
     const shown = items.filter(x => [x.title,x.city,x.price].join(" ").toLowerCase().includes(q));
     if (sort.value === "az") shown.sort((a,b) => String(a.title).localeCompare(String(b.title),"ru"));
-    else shown.sort((a,b) => (Number(b.savedAt)||0) - (Number(a.savedAt)||0) * (sort.value === "new" ? 1 : -1));
+    else shown.sort((a,b) => sort.value === "new" ? (Number(b.savedAt)||0) - (Number(a.savedAt)||0) : (Number(a.savedAt)||0) - (Number(b.savedAt)||0));
     count.textContent = q ? shown.length + " из " + items.length : items.length + (items.length === 1 ? " сохранено" : " сохранено");
     if (!shown.length) {
       list.innerHTML = '<div class="empty"><div class="empty-mark">' + (items.length ? "⌕" : "🏝️") + '</div><strong>' + (items.length ? "Ничего не найдено" : "Здесь пока пусто") + '</strong>' + (items.length ? "Попробуй другой запрос." : "Нажимай «🏝️ В избранное» на карточках Kufar — они появятся здесь.") + '<small>WOAQUEZ · YOUR FINDS, YOUR RULES</small></div>';
