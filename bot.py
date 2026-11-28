@@ -7,7 +7,7 @@ import re
 import tempfile
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote_plus, urlsplit, urlunsplit
 
 import feedparser
 from telegram import Update
@@ -287,6 +287,28 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("Уведомления отключены. Чтобы включить снова, отправь /start.")
 
 
+async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args).strip()
+    if not query:
+        await update.effective_message.reply_text(
+            "Напиши, что искать. Пример: /search Stone Island Off Dye"
+        )
+        return
+
+    search_url = (
+        "https://www.kufar.by/listings?query="
+        + quote_plus(query)
+        + "&rgn=all"
+    )
+    await update.effective_message.reply_text(
+        f"🔎 Поиск на Kufar по всей Беларуси: {query}\\n\\n"
+        "Открой результаты по ссылке:\\n"
+        f"{search_url}\\n\\n"
+        "Это первая версия: бот открывает поиск Kufar, "
+        "но пока не загружает карточки объявлений прямо в Telegram."
+    )
+
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(
         "⚙️ Stone Island Hunter\n"
@@ -338,7 +360,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start — включить уведомления\n"
         "/stop — отключить уведомления\n"
         "/status — настройки бота\n"
-        "/check — проверить объявления сейчас\n"
+        "/check — проверить RSS-источники\\n"
+        "/search <запрос> — найти на Kufar по всей Беларуси\\n"
+        "Пример: /search Stone Island Off Dye\n"
         "/help — список команд"
     )
 
@@ -386,6 +410,7 @@ def main():
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("check", check_now))
+    application.add_handler(CommandHandler("search", search_kufar))
     application.add_handler(CommandHandler("help", help_command))
     application.run_polling(drop_pending_updates=True)
 
