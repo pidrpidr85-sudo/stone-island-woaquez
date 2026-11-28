@@ -295,18 +295,36 @@ class KufarMetaParser(HTMLParser):
         super().__init__()
         self.meta = {}
         self.links = []
+        self.text_parts = []
+        self.hidden_tags = []
 
     def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
         values = {key.lower(): value for key, value in attrs if key and value}
-        if tag.lower() == "a":
+        if tag in ("script", "style", "noscript", "svg"):
+            self.hidden_tags.append(tag)
+        if tag == "a":
             href = values.get("href", "")
             if href:
                 self.links.append(html.unescape(href))
-        if tag.lower() == "meta":
+        if tag == "meta":
             key = values.get("property") or values.get("name")
             value = values.get("content")
             if key and value:
                 self.meta[key.lower()] = clean_text(value)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.hidden_tags:
+            self.hidden_tags.reverse()
+            self.hidden_tags.remove(tag)
+            self.hidden_tags.reverse()
+
+    def handle_data(self, data):
+        if data and not self.hidden_tags:
+            value = clean_text(data)
+            if value:
+                self.text_parts.append(value)
 
 
 
@@ -341,6 +359,7 @@ def fetch_kufar_page(url):
             "content_type": response.headers.get("Content-Type", ""),
             "bytes": len(raw),
             "meta": parser.meta,
+            "page_text": " ".join(parser.text_parts)[:120000],
             "item_links": item_links[:30],
         }
 
@@ -383,12 +402,13 @@ async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.edit_text("\n".join(lines))
 
 
-def kufar_city(meta):
-    text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
-    return detect_belarus_city(text)
+def kufar_city(meta, page_text=""):
+    # Prefer listing metadata; use visible page text only as a fallback.
+    metadata_text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
+    return detect_belarus_city(metadata_text) or detect_belarus_city(page_text)
 
 
-def kufar_price(meta):
+def kufar_price(meta, page_text=""):
     amount = meta.get("product:price:amount")
     currency = meta.get("product:price:currency", "").upper()
     if amount:
@@ -396,7 +416,7 @@ def kufar_price(meta):
             return f"{float(amount.replace(',', '.')):g} {currency or 'BYN'}"
         except ValueError:
             pass
-    text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
+    text = " ".join((meta.get("og:title", ""), meta.get("og:description", ""), page_text))
     match = re.search(
         r"(?:цена\s*)?([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:р\.|BYN|бел(?:арус(?:ских)?)?\.?\s*руб(?:лей|ля)?\.?)",
         text,
@@ -537,8 +557,9 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
                 meta = page.get("meta", {})
                 title = meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"
                 image_url = meta.get("og:image")
-                price = kufar_price(meta)
-                city = kufar_city(meta)
+                page_text = page.get("page_text", "")
+                price = kufar_price(meta, page_text)
+                city = kufar_city(meta, page_text)
                 checked += 1
 
                 # If a city was explicitly requested, never show listings from another city
