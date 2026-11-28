@@ -305,10 +305,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Чтобы искать на Kufar, просто напиши запрос обычным сообщением — команды не нужны.\n"
         "Например: «Сними квартиру посуточно до 250 BYN на два дня».\n\n"
         "Команды: /status, /check, /stop, /help.",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("🏝️ Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]],
-            resize_keyboard=True,
-            is_persistent=True,
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🏝️ Открыть избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
         ),
     )
 
