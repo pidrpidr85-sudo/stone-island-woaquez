@@ -128,5 +128,81 @@ class KufarParsingTests(unittest.TestCase):
         )
 
 
+class NaturalSearchTests(unittest.TestCase):
+    def test_daily_rental_request(self):
+        from bot import parse_natural_search
+        query, budget, days, city = parse_natural_search(
+            "Сними квартиру посуточно до 250 BYN на два дня в Минске"
+        )
+        self.assertEqual(query, "квартиру посуточно")
+        self.assertEqual(budget, 250)
+        self.assertEqual(days, 2)
+        self.assertEqual(city, "Минск")
+
+    def test_any_price_does_not_create_budget(self):
+        from bot import parse_natural_search
+        query, budget, days, city = parse_natural_search(
+            "Найди Stone Island Off Dye в Бресте, любая цена вообще"
+        )
+        self.assertEqual(query, "Stone Island Off Dye")
+        self.assertIsNone(budget)
+        self.assertIsNone(days)
+        self.assertEqual(city, "Брест")
+
+    def test_numeric_budget_without_currency(self):
+        from bot import parse_natural_search
+        query, budget, days, city = parse_natural_search(
+            "найди комнату до 300 в Гродно"
+        )
+        self.assertEqual(query, "комнату")
+        self.assertEqual(budget, 300)
+        self.assertEqual(city, "Гродно")
+
+
+class KufarParsingTests(unittest.TestCase):
+    def test_city_forms(self):
+        from bot import detect_belarus_city
+        self.assertEqual(detect_belarus_city("Объявление купить в Минске"), "Минск")
+        self.assertEqual(detect_belarus_city("Сдаётся квартира в Новополоцке"), "Новополоцк")
+        self.assertIsNone(detect_belarus_city("Доставка по Беларуси"))
+
+    def test_price_from_metadata(self):
+        from bot import kufar_price
+        self.assertEqual(
+            kufar_price({"og:title": "Куртка, цена 950 р."}),
+            "950 BYN",
+        )
+
+    def test_price_from_visible_page_text(self):
+        from bot import kufar_price
+        self.assertEqual(
+            kufar_price({}, "Цена 1 200 р. Состояние отличное"),
+            "1200 BYN",
+        )
+
+    def test_missing_price_is_not_invented(self):
+        from bot import kufar_price
+        self.assertIsNone(kufar_price({}, "Цена договорная"))
+
+    def test_only_real_kufar_listing_links_are_accepted(self):
+        from bot import normalize_kufar_item_link
+        self.assertEqual(
+            normalize_kufar_item_link("/item/123456"),
+            "https://www.kufar.by/item/123456",
+        )
+        self.assertEqual(
+            normalize_kufar_item_link("https://www.kufar.by/item/123456?ref=feed"),
+            "https://www.kufar.by/item/123456",
+        )
+        self.assertEqual(
+            normalize_kufar_item_link("https://evil.example/item/123456"),
+            "",
+        )
+        self.assertEqual(
+            normalize_kufar_item_link("https://www.kufar.by/account/login"),
+            "",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
