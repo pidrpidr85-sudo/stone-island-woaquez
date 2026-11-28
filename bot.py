@@ -383,6 +383,24 @@ async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.edit_text("\n".join(lines))
 
 
+def kufar_city(meta):
+    text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
+    match = re.search(r"\\bкупить\\s+в\\s+(.+?)\\s+на\\s+Куфаре\\b", text, re.IGNORECASE)
+    if not match:
+        match = re.search(r"\\bв\\s+([А-ЯЁ][А-Яа-яЁё-]{2,}(?:\\s+[А-ЯЁ][А-Яа-яЁё-]{2,})?)\\b", text)
+    if not match:
+        return None
+    city = clean_text(match.group(1)).strip(" ,.-")
+    city_forms = {
+        "Минске": "Минск", "Гродно": "Гродно", "Бресте": "Брест",
+        "Витебске": "Витебск", "Гомеле": "Гомель", "Могилёве": "Могилёв",
+        "Могилеве": "Могилёв", "Барановичах": "Барановичи",
+        "Борисове": "Борисов", "Пинске": "Пинск", "Орше": "Орша",
+        "Молодечно": "Молодечно", "Жодино": "Жодино", "Солигорске": "Солигорск",
+    }
+    return city_forms.get(city, city)
+
+
 def kufar_price(meta):
     amount = meta.get("product:price:amount")
     currency = meta.get("product:price:currency", "").upper()
@@ -441,9 +459,9 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 description = meta.get("og:description", "")
                 image_url = meta.get("og:image")
                 price = kufar_price(meta)
+                city = kufar_city(meta)
                 caption_parts = [f"🧥 {title[:220]}"]
-                if description:
-                    caption_parts.append(description[:350])
+                caption_parts.append(f"📍 {city or 'Город не указан'}")
                 caption_parts.append(f"💰 {price or 'Цена не указана'}")
                 caption = "\n\n".join(caption_parts)
                 keyboard = InlineKeyboardMarkup(
