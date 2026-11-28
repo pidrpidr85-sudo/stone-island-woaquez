@@ -319,7 +319,7 @@ footer{text-align:center;color:#a0a0a7;font-size:9px;margin-top:27px;letter-spac
       history.replaceState({}, "", location.pathname);
     }
     render();
-    window.setTimeout(() => { const splash = document.getElementById("splash"); if (splash) splash.classList.add("is-hidden"); }, 850);
+    window.setTimeout(() => { const splash = document.getElementById("splash"); if (splash) splash.classList.add("is-hidden"); }, 2400);
   })();
   filter.addEventListener("input", render);
   sort.addEventListener("change", render);
