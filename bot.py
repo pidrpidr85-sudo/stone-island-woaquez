@@ -428,6 +428,51 @@ def kufar_city(meta, page_text=""):
     return detect_belarus_city(metadata_text) or detect_belarus_city(page_text)
 
 
+def is_off_dye_keyword_spam(title, query):
+    """Reject Off Dye listings stuffed with unrelated brands in parentheses."""
+    if not re.search(r"\boff[\s-]*dye\b", query, re.IGNORECASE):
+        return False
+
+    brand_patterns = {
+        "nike": r"\bnike\b",
+        "adidas": r"\badidas\b",
+        "stone island": r"\bstone\s+island\b",
+        "jordan": r"\bjordan\b",
+        "bape": r"\bbape\b",
+        "amiri": r"\bamiri\b",
+        "aape": r"\baape\b",
+        "cp company": r"\bc\.?\s*p\.?\s*company\b",
+        "raf simons": r"\braf\s+simons\b",
+        "track": r"\btrack\b",
+    }
+    for group in re.findall(r"\(([^)]*)\)", title or ""):
+        brands_found = {
+            brand for brand, pattern in brand_patterns.items()
+            if re.search(pattern, group, re.IGNORECASE)
+        }
+        if len(brands_found) >= 2:
+            return True
+    return False
+
+
+def clean_kufar_title(title):
+    title = html.unescape(str(title or "")).strip()
+    title = re.sub(
+        r"\s*[,|]\s*цена\s+.*?\s+купить\s+в\s+.*?\s+на\s+Куфаре\s*[-–—]?\s*$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
+    title = re.sub(
+        r"\s*[-–—]?\s*Объявление\s*№\s*\d+\s*$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
+    title = re.sub(r"\s*№\s*\d+\b", "", title)
+    return re.sub(r"\s+", " ", title).strip(" -–—,|")
+
+
 def kufar_price(meta, page_text=""):
     amount = meta.get("product:price:amount")
     currency = meta.get("product:price:currency", "").upper()
@@ -591,6 +636,7 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
         checked = 0
         skipped_city = 0
         skipped_budget = 0
+        skipped_keyword_spam = 0
         unknown_price = 0
         fetch_errors = 0
         daily_limit = (
@@ -607,7 +653,7 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
                     page_text = page.get("page_text", "")
                     return {
                         "link": link,
-                        "title": meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar",
+                        "title": clean_kufar_title(meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"),
                         "image": meta.get("og:image"),
                         "price": kufar_price(meta, page_text),
                         "city": kufar_city(meta, page_text),
@@ -635,6 +681,11 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
             image_url = item["image"]
             price = item["price"]
             city = item["city"]
+
+            # Off Dye search should not return keyword-stuffed listings.
+            if is_off_dye_keyword_spam(title, query):
+                skipped_keyword_spam += 1
+                continue
 
             # A requested city must be confirmed by the public listing page.
             if requested_city and city != requested_city:
@@ -688,6 +739,8 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
             f"Карточек отправлено: {sent}.\n"
             f"Объявлений проверено: {checked} из {len(links)} найденных ссылок."
         )
+        if skipped_keyword_spam:
+            summary += f"\nОтсеяно объявлений с перечислением чужих брендов в скобках: {skipped_keyword_spam}."
         if requested_city:
             summary += f"\nГород не удалось подтвердить или он не совпал: {skipped_city}."
         if daily_limit is not None:
