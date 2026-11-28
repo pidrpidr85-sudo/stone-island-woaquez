@@ -300,7 +300,11 @@ def favorite_app_url(item):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type != ChatType.PRIVATE:
-        await update.effective_message.reply_text(
+        await update.effective_message.reply_text("Открой личный чат с ботом и отправь /start.")
+        return
+    subscribers.add(chat.id)
+    save_json(SUBSCRIBERS_FILE, sorted(subscribers))
+    await update.effective_message.reply_text(
         "🏝️ ДОБРО ПОЖАЛОВАТЬ В WOAQUEZ!\\n"
         "━━━━━━━━━━━━━━━━━━\\n\\n"
         "Твой помощник по поиску объявлений уже готов к работе.\\n\\n"
