@@ -105,14 +105,8 @@
     <section class="hero">
       <div class="eyebrow">WOAQUEZ COMMUNITY</div>
       <h1 id="pageTitle">Избранное<span style="color:var(--accent)">.</span></h1>
-      <div class="intro" id="pageIntro">Твоя личная коллекция находок, привилегии и небольшие игры.</div>
+      <div class="intro" id="pageIntro">Твоя личная коллекция сохранённых объявлений.</div>
     </section>
-    <nav class="tabs" aria-label="Разделы">
-      <button class="tab active" data-tab="favorites">🏝️ Избранное</button>
-      <button class="tab" data-tab="perks">✦ Привилегии</button>
-      <button class="tab" data-tab="games">🎮 Игры</button>
-      <button class="tab" data-tab="cases">🎁 Кейсы</button>
-    </nav>
     <section id="favoritesPanel" class="panel">
     <div class="toolbar">
       <div class="search-wrap"><span class="search-icon">⌕</span><input id="filter" class="search" type="search" placeholder="Найти в избранном…" autocomplete="off"></div>
@@ -121,34 +115,6 @@
     <div class="section-line"><span>Сохранённые объявления</span><span id="count">0 / 0</span></div>
     <div id="notice" hidden></div>
     <main id="list"><div class="empty"><div class="empty-mark">🏝️</div><strong>Собираем твою коллекцию</strong>Загружаю сохранённые объявления…</div></main>
-    </section>
-    <section id="perksPanel" class="panel" hidden>
-      <div class="profile-card">
-        <div class="profile-top"><div><div class="eyebrow">ТВОЙ СТАТУС</div><div class="rank" id="rankName">Новичок</div><div class="muted" id="rankDesc">Начни собирать свою коллекцию WOAQUEZ.</div></div><div class="rank-icon" id="rankIcon">🌱</div></div>
-        <div class="xp-line"><span id="xpLabel">0 XP</span><span id="nextLevel">До следующего уровня: 50 XP</span></div>
-        <div class="xp-track"><div class="xp-fill" id="xpFill"></div></div>
-        <div class="muted" style="margin-top:10px">Очки опыта — игровые баллы внутри Mini App. Их нельзя купить, продать или обменять на деньги.</div>
-      </div>
-      <div class="section-line"><span>Твои привилегии</span><span id="badgeCount">0 / 4</span></div>
-      <div class="perk-list" id="perkList"></div>
-    </section>
-    <section id="casesPanel" class="panel" hidden>
-      <div class="game-card"><div class="eyebrow">WOAQUEZ GIFT ROOM</div><div class="rank">Коллекция подарков 🎁</div><div class="muted">Бесплатные виртуальные кейсы. Один кейс каждого типа в день. Предметы остаются в Mini App и не являются настоящими Telegram Gifts.</div></div>
-      <div class="case-grid">
-        <div class="case-tile"><div class="case-art">🎁</div><strong>Starter Case</strong><small>Первые подарки</small><button data-case="starter">Открыть бесплатно</button></div>
-        <div class="case-tile"><div class="case-art">💎</div><strong>Premium Case</strong><small>Коллекционные находки</small><button data-case="premium">Открыть бесплатно</button></div>
-        <div class="case-tile"><div class="case-art">👑</div><strong>WOAQUEZ Exclusive</strong><small>Особая серия</small><button data-case="exclusive">Открыть бесплатно</button></div>
-        <div class="case-tile"><div class="case-art">🌟</div><strong>Legendary Case</strong><small>Редкие трофеи</small><button data-case="legendary">Открыть бесплатно</button></div>
-      </div>
-      <div id="caseResult"></div><div class="section-line" style="margin-top:18px"><span>Моя коллекция</span><span id="giftCount">0 предметов</span></div><div class="gift-collection" id="giftCollection"></div>
-    </section>
-    <section id="gamesPanel" class="panel" hidden>
-      <div class="game-card"><div class="eyebrow">WOAQUEZ ARCADE</div><div class="rank" style="margin:7px 0">Короткий перерыв 🎮</div><div class="muted">Играй ради удовольствия и собирай XP. Никаких ставок и покупок — только мини-игры.</div></div>
-      <div class="game-grid">
-        <button class="game-tile" data-game="memory"><span>🧠</span><strong>Найди пары</strong><small>Запомни карточки и открой совпадения</small></button>
-        <button class="game-tile" data-game="quiz"><span>⚡</span><strong>Быстрый квиз</strong><small>3 вопроса о стиле и одежде</small></button>
-      </div>
-      <div id="gameArea" style="margin-top:13px"></div>
     </section>
     <footer>WOAQUEZ FINDER · EST. 2026</footer>
   </div>
