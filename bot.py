@@ -14,7 +14,7 @@ from urllib.parse import quote_plus, urlsplit, urlunsplit
 import feedparser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatType
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -424,35 +424,69 @@ def kufar_price(meta):
         return None
 
 
-async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw_query = " ".join(context.args).strip()
-    if not raw_query:
+def parse_natural_search(raw_text):
+    text = clean_text(raw_text)
+    days = None
+    day_match = re.search(
+        r"\b(?:на\s*)?(один|одну|два|две|три|четыре|пять|[1-9]\d*)\s*(?:день|дня|дней|сутки|суток)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if day_match:
+        day_word = day_match.group(1).lower()
+        day_numbers = {
+            "один": 1, "одну": 1, "два": 2, "две": 2,
+            "три": 3, "четыре": 4, "пять": 5,
+        }
+        days = day_numbers.get(day_word)
+        if days is None:
+            try:
+                days = int(day_word)
+            except ValueError:
+                days = None
+        text = text[:day_match.start()] + " " + text[day_match.end():]
+
+    budget = None
+    budget_match = re.search(
+        r"\b(?:до|максимум|бюджет(?:ом)?\s*)\s*([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\b",
+        text,
+        re.IGNORECASE,
+    )
+    if budget_match:
+        try:
+            budget = float(re.sub(r"\s+", "", budget_match.group(1)).replace(",", "."))
+            text = text[:budget_match.start()] + " " + text[budget_match.end():]
+        except ValueError:
+            budget = None
+
+    text = re.sub(r"\s+", " ", text).strip(" ,.!?")
+    # Keep useful listing terms such as "снять квартиру посуточно".
+    return text, budget, days
+
+
+async def run_kufar_search(update: Update, query: str, max_budget=None, duration_days=None):
+    if not query:
         await update.effective_message.reply_text(
-            "Напиши, что искать.\n"
-            "Примеры:\n"
-            "/search снять квартиру\n"
-            "/search BMW E60\n"
-            "/search iPhone 15"
+            "Напиши, что нужно найти. Например: «сними квартиру посуточно до 250 BYN на два дня»."
         )
         return
-
-    # Ignore any optional price phrase: search listings at every price.
-    query = re.sub(
-        r"\s+\bдо\s*[0-9][0-9\s]*(?:[.,][0-9]{1,2})?\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\s*$",
-        "",
-        raw_query,
-        flags=re.IGNORECASE,
-    ).strip()
-    if not query:
-        query = raw_query
 
     search_url = (
         "https://www.kufar.by/listings?query="
         + quote_plus(query)
         + "&rgn=all"
     )
+    budget_note = ""
+    if max_budget is not None:
+        if duration_days and duration_days > 1:
+            budget_note = (
+                f" Бюджет всего {max_budget:g} BYN на {duration_days} дн. "
+                f"(ориентир до {max_budget / duration_days:g} BYN в сутки)."
+            )
+        else:
+            budget_note = f" Бюджет до {max_budget:g} BYN."
     progress = await update.effective_message.reply_text(
-        f"🔎 Ищу «{query}» на всём Kufar по Беларуси — без ограничения цены..."
+        f"🔎 Ищу «{query}» на всём Kufar по Беларуси.{budget_note}"
     )
     try:
         results = await asyncio.to_thread(fetch_kufar_page, search_url)
@@ -466,6 +500,12 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sent = 0
         checked = 0
+        skipped = 0
+        daily_limit = (
+            max_budget / duration_days
+            if max_budget is not None and duration_days and duration_days > 1
+            else max_budget
+        )
         for link in links[:30]:
             if sent >= 10:
                 break
@@ -478,9 +518,23 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 city = kufar_city(meta)
                 checked += 1
 
+                if daily_limit is not None:
+                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price or "")
+                    if not amount_match:
+                        skipped += 1
+                        continue
+                    amount = float(amount_match.group(1).replace(",", "."))
+                    if amount > daily_limit:
+                        skipped += 1
+                        continue
+
                 caption_parts = [f"📌 {title[:220]}"]
                 caption_parts.append(f"📍 {city or 'Город не указан'}")
                 caption_parts.append(f"💰 {price or 'Цена не указана'}")
+                if duration_days and max_budget is not None:
+                    caption_parts.append(
+                        f"🗓 {duration_days} дн. · бюджет до {max_budget:g} BYN всего"
+                    )
                 caption = "\n\n".join(caption_parts)
                 keyboard = InlineKeyboardMarkup(
                     [[InlineKeyboardButton("Открыть объявление на Kufar", url=link)]]
@@ -505,19 +559,40 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logger.exception("Не удалось получить объявление Kufar: %s", link)
 
-        await progress.edit_text(
+        summary = (
             f"✅ Поиск завершён.\n"
             f"Карточек отправлено: {sent}.\n"
-            f"Объявлений проверено: {checked} из {len(links)} найденных ссылок.\n"
-            f"Ограничения по цене нет.\n"
-            f"Все результаты: {search_url}"
+            f"Объявлений проверено: {checked} из {len(links)} найденных ссылок."
         )
+        if daily_limit is not None:
+            summary += f"\nОтсеяно по бюджету или без цены: {skipped}."
+        else:
+            summary += "\nОграничения по цене нет."
+        summary += f"\nВсе результаты: {search_url}"
+        await progress.edit_text(summary)
     except Exception as exc:
         logger.exception("Ошибка поиска Kufar")
         await progress.edit_text(
             f"❌ Не удалось обработать поиск Kufar: {type(exc).__name__}: {str(exc)[:180]}\n"
             f"Ссылка: {search_url}"
         )
+
+
+async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw_query = " ".join(context.args).strip()
+    query, budget, days = parse_natural_search(raw_query)
+    await run_kufar_search(update, query, budget, days)
+
+
+async def natural_language_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    if not message or not message.text:
+        return
+    query, budget, days = parse_natural_search(message.text)
+    if not query:
+        await message.reply_text("Напиши, что нужно найти на Kufar.")
+        return
+    await run_kufar_search(update, query, budget, days)
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -623,6 +698,7 @@ def main():
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("check", check_now))
     application.add_handler(CommandHandler("search", search_kufar))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, natural_language_search))
     application.add_handler(CommandHandler("testkufar", test_kufar))
     application.add_handler(CommandHandler("help", help_command))
     application.run_polling(drop_pending_updates=True)
