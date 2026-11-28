@@ -544,19 +544,20 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
                     skipped += 1
                     continue
 
-                if daily_limit is not None:
-                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price or "")
-                    if not amount_match:
-                        skipped += 1
-                        continue
-                    amount = float(amount_match.group(1).replace(",", "."))
-                    if amount > daily_limit:
-                        skipped += 1
-                        continue
+                if daily_limit is not None and price:
+                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price)
+                    if amount_match:
+                        amount = float(amount_match.group(1).replace(",", "."))
+                        if amount > daily_limit:
+                            skipped += 1
+                            continue
 
                 caption_parts = [f"📌 {title[:220]}"]
                 caption_parts.append(f"📍 {city or 'Город не указан'}")
-                caption_parts.append(f"💰 {price or 'Цена не указана'}")
+                caption_parts.append(
+                    f"💰 {price}" if price else
+                    "💰 Цена не указана — соответствие бюджету нужно уточнить у продавца"
+                )
                 if duration_days and max_budget is not None:
                     caption_parts.append(
                         f"🗓 {duration_days} дн. · бюджет до {max_budget:g} BYN всего"
