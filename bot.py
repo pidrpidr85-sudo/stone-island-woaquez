@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import quote_plus, urlsplit, urlunsplit
 
 import feedparser
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -445,19 +445,26 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if description:
                     caption_parts.append(description[:350])
                 caption_parts.append(f"💰 {price or 'Цена не указана'}")
-                caption_parts.append(f"🔗 {link}")
                 caption = "\n\n".join(caption_parts)
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Открыть объявление на Kufar", url=link)]]
+                )
                 if image_url and image_url.startswith(("https://", "http://")):
                     try:
                         await update.effective_message.reply_photo(
                             photo=image_url,
                             caption=caption[:1024],
+                            reply_markup=keyboard,
                         )
                     except Exception:
                         logger.warning("Не удалось отправить фото Kufar; отправляю текст", exc_info=True)
-                        await update.effective_message.reply_text(caption[:4000])
+                        await update.effective_message.reply_text(
+                            caption[:4000], reply_markup=keyboard
+                        )
                 else:
-                    await update.effective_message.reply_text(caption[:4000])
+                    await update.effective_message.reply_text(
+                        caption[:4000], reply_markup=keyboard
+                    )
                 sent += 1
             except Exception:
                 logger.exception("Не удалось получить объявление Kufar: %s", link)
