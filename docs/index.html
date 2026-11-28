@@ -315,7 +315,8 @@
     show();
   };
   document.querySelectorAll("[data-game]").forEach(b=>b.addEventListener("click",()=>b.dataset.game==="memory"?memoryStart():quizStart()));
-\n  const params = new URLSearchParams(location.search);
+
+  const params = new URLSearchParams(location.search);
   const id = params.get("save");
   (async () => {
     profile = await getProfile();\n    items = await readAll();
