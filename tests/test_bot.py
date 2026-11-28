@@ -187,5 +187,47 @@ class KufarParsingTests(unittest.TestCase):
         )
 
 
+
+class FavoritesMiniAppTests(unittest.TestCase):
+    def test_favorite_app_url_contains_listing_fields(self):
+        from urllib.parse import parse_qs, urlsplit
+        from bot import favorite_app_url
+        import bot
+
+        previous = bot.WEBAPP_URL
+        try:
+            bot.WEBAPP_URL = "https://pidrpidr85-sudo.github.io/stone-island-woaquez/"
+            url = favorite_app_url({
+                "link": "https://www.kufar.by/item/123456",
+                "title": "Stone Island Off Dye",
+                "city": "Минск",
+                "price": "950 BYN",
+                "image": "https://images.example/item.jpg",
+            })
+            parsed = urlsplit(url)
+            values = parse_qs(parsed.query)
+            self.assertEqual(values["save"], ["123456"])
+            self.assertEqual(values["title"], ["Stone Island Off Dye"])
+            self.assertEqual(values["city"], ["Минск"])
+            self.assertEqual(values["price"], ["950 BYN"])
+            self.assertEqual(values["link"], ["https://www.kufar.by/item/123456"])
+        finally:
+            bot.WEBAPP_URL = previous
+
+    def test_favorite_app_rejects_non_kufar_item_path(self):
+        from bot import favorite_app_url
+        import bot
+
+        previous = bot.WEBAPP_URL
+        try:
+            bot.WEBAPP_URL = "https://pidrpidr85-sudo.github.io/stone-island-woaquez/"
+            self.assertEqual(
+                favorite_app_url({"link": "https://evil.example/item/123"}),
+                bot.WEBAPP_URL,
+            )
+        finally:
+            bot.WEBAPP_URL = previous
+
+
 if __name__ == "__main__":
     unittest.main()
