@@ -305,17 +305,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers.add(chat.id)
     save_json(SUBSCRIBERS_FILE, sorted(subscribers))
     await update.effective_message.reply_text(
-        "🏝️ ДОБРО ПОЖАЛОВАТЬ В WOAQUEZ!\n"
+        "WOAQUEZ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
-        "Твой помощник по поиску объявлений уже готов к работе.\n\n"
-        "🔎 <b>Поиск без команд</b>\n"
-        "⭐ <b>Избранное</b>\n"
-        "Сохраняй интересные объявления и возвращайся к ним в любой момент.\n\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        "Напиши свой первый запрос — WOAQUEZ начнёт поиск!",
-        parse_mode="HTML",
+        "Привет! Я помогу найти нужные объявления на Kufar.\n\n"
+        "Опиши, что ищешь, обычными словами — например, укажи товар или услугу, город и желаемую цену.\n\n"
+        "Интересные объявления можно сохранить в избранное и вернуться к ним позже.\n\n"
+        "Готов? Напиши, что будем искать.",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⭐ Открыть избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
+            [[InlineKeyboardButton("Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
         ),
     )
 
