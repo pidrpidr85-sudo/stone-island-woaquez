@@ -82,6 +82,15 @@ class NaturalSearchTests(unittest.TestCase):
         self.assertEqual(budget, 300)
         self.assertEqual(city, "Гродно")
 
+    def test_budget_with_compact_ruble_suffix(self):
+        from bot import parse_natural_search
+        query, budget, days, city = parse_natural_search(
+            "сними квартиру до 250р. в Минске"
+        )
+        self.assertEqual(query, "квартиру")
+        self.assertEqual(budget, 250)
+        self.assertEqual(city, "Минск")
+
 
 class KufarParsingTests(unittest.TestCase):
     def test_city_forms(self):
