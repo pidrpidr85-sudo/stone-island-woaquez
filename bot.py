@@ -274,8 +274,14 @@ async def check_feeds(bot):
 
 def favorite_app_url(item):
     """Build a compact Mini App URL that saves this Kufar listing on open."""
-    link = item.get("link", "")
-    match = re.search(r"/item/(\d+)", urlsplit(link).path)
+    link = str(item.get("link", "") or "").strip()
+    parts = urlsplit(link)
+    if (
+        parts.scheme not in ("http", "https")
+        or (parts.hostname or "").lower() not in ("kufar.by", "www.kufar.by")
+    ):
+        return WEBAPP_URL
+    match = re.fullmatch(r"/item/(\d+)/?", parts.path)
     if not match:
         return WEBAPP_URL
     params = {
