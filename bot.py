@@ -306,7 +306,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Например: «Сними квартиру посуточно до 250 BYN на два дня».\n\n"
         "Команды: /status, /check, /stop, /help.",
         reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("❤️ Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]],
+            [[KeyboardButton("🏝️ Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]],
             resize_keyboard=True,
             is_persistent=True,
         ),
@@ -775,7 +775,7 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
             if WEBAPP_URL.startswith("https://"):
                 keyboard_rows.append([
                     InlineKeyboardButton(
-                        "❤️ В избранное",
+                        "🏝️ В избранное",
                         web_app=WebAppInfo(url=favorite_app_url(item)),
                     )
                 ])
