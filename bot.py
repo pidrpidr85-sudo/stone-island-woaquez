@@ -207,7 +207,7 @@ async def check_feeds(bot):
 
     async with check_lock:
         found = 0
-        stats = {"feeds": len(FEED_URLS), "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0, "feed_info": []}
+        stats = {"feeds": len(FEED_URLS), "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0, "feed_info": [], "error_info": []}
         for url in FEED_URLS:
             try:
                 raw = await asyncio.to_thread(download_feed, url)
@@ -243,8 +243,9 @@ async def check_feeds(bot):
                         seen.add(item["link"])
                         save_json(SEEN_FILE, sorted(seen)[-5000:])
                         found += 1
-            except Exception:
+            except Exception as exc:
                 stats["errors"] += 1
+                stats["error_info"].append(f"{type(exc).__name__}: {str(exc)[:220]}")
                 logger.exception("Ошибка обработки RSS-источника %s", url)
         last_check_stats = stats
         logger.info("Статистика RSS-проверки: %s", stats)
@@ -308,6 +309,8 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 details += f"\nНазвание ленты: {info['title']}"
             if info.get("bozo"):
                 details += f"\nПредупреждение RSS: {info['bozo']}"
+        for error in stats.get("error_info", []):
+            details += f"\nОшибка: {error}"
         await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.{details}")
     except asyncio.TimeoutError:
         await message.edit_text("⌛ Проверка не уложилась в 120 секунд. Посмотри логи Railway.")
