@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import quote_plus, urlencode, urlsplit, urlunsplit
 
 import feedparser
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update, WebAppInfo)
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, MenuButtonWebApp, ReplyKeyboardMarkup, Update, WebAppInfo)
 from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -939,6 +939,17 @@ async def post_init(application):
         "Бот запущен. RSS=%s, подписчиков=%s, лимит=%.2f EUR, интервал=%ss",
         len(FEED_URLS), len(subscribers), MAX_EUR, CHECK_INTERVAL,
     )
+    if WEBAPP_URL.startswith("https://"):
+        try:
+            await application.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Избранное",
+                    web_app=WebAppInfo(url=WEBAPP_URL),
+                )
+            )
+            logger.info("Кнопка Mini App «Избранное» установлена в меню чата.")
+        except Exception:
+            logger.exception("Не удалось установить кнопку Mini App в меню чата.")
     application.create_task(scheduled_check(application))
 
 
