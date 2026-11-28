@@ -37,6 +37,7 @@ EUR_RATES = {"EUR": 1.0, "USD": 0.93, "GBP": 1.19, "CHF": 1.06}
 subscribers = set()
 seen = set()
 check_lock = asyncio.Lock()
+last_check_stats = {}
 
 PRICE_PATTERNS = (
     (r"€\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\s*€|\bEUR\s*([0-9]+(?:[.,][0-9]{1,2})?)|([0-9]+(?:[.,][0-9]{1,2})?)\s*EUR\b", "EUR"),
@@ -199,11 +200,14 @@ async def send_item(bot, item):
 
 
 async def check_feeds(bot):
+    global last_check_stats
     if not FEED_URLS:
+        last_check_stats = {"feeds": 0, "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0}
         return 0
 
     async with check_lock:
         found = 0
+        stats = {"feeds": len(FEED_URLS), "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0}
         for url in FEED_URLS:
             try:
                 raw = await asyncio.to_thread(download_feed, url)
@@ -212,15 +216,36 @@ async def check_feeds(bot):
                     logger.warning("RSS вернул предупреждение для %s: %s", url, parsed.bozo_exception)
 
                 for entry in parsed.entries:
+                    stats["entries"] += 1
+                    title = clean_text(entry.get("title", "Без названия"))
+                    description = entry_text(entry)
+                    searchable = (title + " " + description).lower()
+                    if not any(brand in searchable for brand in BRANDS):
+                        continue
+                    stats["brand"] += 1
+                    price_data = extract_price(title + " " + description)
+                    if not price_data:
+                        continue
+                    stats["price"] += 1
+                    amount, currency = price_data
+                    if amount <= 0 or amount * EUR_RATES[currency] > MAX_EUR:
+                        continue
+                    stats["under_limit"] += 1
                     item = matching_item(entry)
-                    if not item or item["link"] in seen:
+                    if not item:
+                        continue
+                    if item["link"] in seen:
+                        stats["duplicates"] += 1
                         continue
                     if await send_item(bot, item):
                         seen.add(item["link"])
                         save_json(SEEN_FILE, sorted(seen)[-5000:])
                         found += 1
             except Exception:
+                stats["errors"] += 1
                 logger.exception("Ошибка обработки RSS-источника %s", url)
+        last_check_stats = stats
+        logger.info("Статистика RSS-проверки: %s", stats)
         return found
 
 
@@ -268,7 +293,14 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     try:
         found = await asyncio.wait_for(check_feeds(context.bot), timeout=120)
-        await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.")
+        stats = last_check_stats
+        details = (f"\nЗаписей в ленте: {stats.get('entries', 0)}"
+                   f"\nСовпадений по бренду: {stats.get('brand', 0)}"
+                   f"\nС ценой: {stats.get('price', 0)}"
+                   f"\nДо 100 €: {stats.get('under_limit', 0)}"
+                   f"\nУже встречались: {stats.get('duplicates', 0)}"
+                   f"\nОшибок источника: {stats.get('errors', 0)}")
+        await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.{details}")
     except asyncio.TimeoutError:
         await message.edit_text("⌛ Проверка не уложилась в 120 секунд. Посмотри логи Railway.")
     except Exception:
