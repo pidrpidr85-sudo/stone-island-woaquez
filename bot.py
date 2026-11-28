@@ -326,13 +326,13 @@ def fetch_kufar_page(url):
         parser.feed(page)
         item_links = []
         for href in parser.links:
-            if re.search(r"/item/\\d+", href):
+            if re.search(r"/item/\d+", href):
                 if href.startswith("/"):
                     href = "https://www.kufar.by" + href
                 link = normalize_link(href)
                 if link and link not in item_links:
                     item_links.append(link)
-        for path in re.findall(r"/item/\\d+", page):
+        for path in re.findall(r"/item/\d+", page):
             link = "https://www.kufar.by" + path
             if link not in item_links:
                 item_links.append(link)
@@ -393,13 +393,13 @@ def kufar_price(meta):
             pass
     text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
     match = re.search(
-        r"(?:цена\\s*)?([0-9][0-9\\s]*(?:[.,][0-9]{1,2})?)\\s*(?:р\\.|BYN|бел(?:арус(?:ских)?)?\\.?\\s*руб(?:лей|ля)?\\.?)",
+        r"(?:цена\s*)?([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:р\.|BYN|бел(?:арус(?:ских)?)?\.?\s*руб(?:лей|ля)?\.?)",
         text,
         re.IGNORECASE,
     )
     if not match:
         return None
-    amount = re.sub(r"\\s+", "", match.group(1)).replace(",", ".")
+    amount = re.sub(r"\s+", "", match.group(1)).replace(",", ".")
     try:
         return f"{float(amount):g} BYN"
     except ValueError:
@@ -427,7 +427,7 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         links = results.get("item_links", [])
         if not links:
             await progress.edit_text(
-                "Не удалось найти ссылки на отдельные объявления в HTML результатов.\\n"
+                "Не удалось найти ссылки на отдельные объявления в HTML результатов.\n"
                 f"Открой поиск вручную: {search_url}"
             )
             return
@@ -446,7 +446,7 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption_parts.append(description[:350])
                 caption_parts.append(f"💰 {price or 'Цена не указана'}")
                 caption_parts.append(f"🔗 {link}")
-                caption = "\\n\\n".join(caption_parts)
+                caption = "\n\n".join(caption_parts)
                 if image_url and image_url.startswith(("https://", "http://")):
                     try:
                         await update.effective_message.reply_photo(
@@ -463,14 +463,14 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.exception("Не удалось получить объявление Kufar: %s", link)
 
         await progress.edit_text(
-            f"✅ Поиск завершён. Карточек отправлено: {sent}.\\n"
-            f"Найдено ссылок: {len(links)}.\\n"
+            f"✅ Поиск завершён. Карточек отправлено: {sent}.\n"
+            f"Найдено ссылок: {len(links)}.\n"
             f"Все результаты: {search_url}"
         )
     except Exception as exc:
         logger.exception("Ошибка поиска Kufar")
         await progress.edit_text(
-            f"❌ Не удалось обработать поиск Kufar: {type(exc).__name__}: {str(exc)[:180]}\\n"
+            f"❌ Не удалось обработать поиск Kufar: {type(exc).__name__}: {str(exc)[:180]}\n"
             f"Ссылка: {search_url}"
         )
 
