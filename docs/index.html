@@ -224,17 +224,23 @@
     {icon:"🎨",name:"Особый акцент профиля",desc:"Открывается на уровне «Легенда».",min:350},
     {icon:"🏆",name:"Значок WOAQUEZ",desc:"Играй и собирай опыт, чтобы открыть значок.",min:100}
   ];
+  const isFounder = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.user &&
+    String(tg.initDataUnsafe.user.username || "").toLowerCase() === "woaquez");
   const updatePerks = () => {
     const level = [...levels].reverse().find(x => profile.xp >= x.min) || levels[0];
     const next = levels.find(x => x.min > profile.xp);
-    document.getElementById("rankName").textContent = level.name;
-    document.getElementById("rankIcon").textContent = level.icon;
-    document.getElementById("rankDesc").textContent = level.desc;
+    document.getElementById("rankName").textContent = isFounder ? "ОСНОВАТЕЛЬ WOAQUEZ" : level.name;
+    document.getElementById("rankIcon").textContent = isFounder ? "👑" : level.icon;
+    document.getElementById("rankDesc").textContent = isFounder ? "Эксклюзивный высший титул создателя сообщества WOAQUEZ." : level.desc;
     document.getElementById("xpLabel").textContent = profile.xp + " XP";
     document.getElementById("nextLevel").textContent = next ? "До «" + next.name + "»: " + (next.min-profile.xp) + " XP" : "Максимальный уровень";
     document.getElementById("xpFill").style.width = next ? Math.min(100,((profile.xp-level.min)/(next.min-level.min))*100) + "%" : "100%";
-    document.getElementById("badgeCount").textContent = perks.filter(p => profile.xp >= p.min).length + " / " + perks.length;
-    document.getElementById("perkList").innerHTML = perks.map(p => '<div class="perk ' + (profile.xp >= p.min ? "" : "locked") + '"><div class="perk-icon">' + p.icon + '</div><div><strong>' + p.name + (profile.xp >= p.min ? " · Открыто" : "") + '</strong><small>' + p.desc + '</small></div></div>').join("");
+    const visiblePerks = isFounder ? [{icon:"👑",name:"ОСНОВАТЕЛЬ WOAQUEZ",desc:"Эксклюзивный титул для @woaquez.",min:0}, ...perks] : perks;
+    document.getElementById("badgeCount").textContent = visiblePerks.filter(p => (isFounder && p.name === "ОСНОВАТЕЛЬ WOAQUEZ") || profile.xp >= p.min).length + " / " + visiblePerks.length;
+    document.getElementById("perkList").innerHTML = visiblePerks.map(p => {
+      const unlocked = (isFounder && p.name === "ОСНОВАТЕЛЬ WOAQUEZ") || profile.xp >= p.min;
+      return '<div class="perk ' + (unlocked ? "" : "locked") + '"><div class="perk-icon">' + p.icon + '</div><div><strong>' + p.name + (unlocked ? " · Открыто" : "") + '</strong><small>' + p.desc + '</small></div></div>';
+    }).join("");
   };
   const switchTab = tab => {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
