@@ -294,15 +294,20 @@ class KufarMetaParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.meta = {}
+        self.links = []
 
     def handle_starttag(self, tag, attrs):
-        if tag.lower() != "meta":
-            return
         values = {key.lower(): value for key, value in attrs if key and value}
-        key = values.get("property") or values.get("name")
-        value = values.get("content")
-        if key and value:
-            self.meta[key.lower()] = clean_text(value)
+        if tag.lower() == "a":
+            href = values.get("href", "")
+            if href:
+                self.links.append(html.unescape(href))
+        if tag.lower() == "meta":
+            key = values.get("property") or values.get("name")
+            value = values.get("content")
+            if key and value:
+                self.meta[key.lower()] = clean_text(value)
+
 
 
 def fetch_kufar_page(url):
@@ -316,14 +321,29 @@ def fetch_kufar_page(url):
     )
     with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
         raw = response.read(2_000_000)
+        page = raw.decode("utf-8", errors="replace")
         parser = KufarMetaParser()
-        parser.feed(raw.decode("utf-8", errors="replace"))
+        parser.feed(page)
+        item_links = []
+        for href in parser.links:
+            if re.search(r"/item/\\d+", href):
+                if href.startswith("/"):
+                    href = "https://www.kufar.by" + href
+                link = normalize_link(href)
+                if link and link not in item_links:
+                    item_links.append(link)
+        for path in re.findall(r"/item/\\d+", page):
+            link = "https://www.kufar.by" + path
+            if link not in item_links:
+                item_links.append(link)
         return {
             "status": getattr(response, "status", 200),
             "content_type": response.headers.get("Content-Type", ""),
             "bytes": len(raw),
             "meta": parser.meta,
+            "item_links": item_links[:30],
         }
+
 
 
 async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -363,6 +383,29 @@ async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await message.edit_text("\n".join(lines))
 
 
+def kufar_price(meta):
+    amount = meta.get("product:price:amount")
+    currency = meta.get("product:price:currency", "").upper()
+    if amount:
+        try:
+            return f"{float(amount.replace(',', '.')):g} {currency or 'BYN'}"
+        except ValueError:
+            pass
+    text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
+    match = re.search(
+        r"(?:цена\\s*)?([0-9][0-9\\s]*(?:[.,][0-9]{1,2})?)\\s*(?:р\\.|BYN|бел(?:арус(?:ских)?)?\\.?\\s*руб(?:лей|ля)?\\.?)",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    amount = re.sub(r"\\s+", "", match.group(1)).replace(",", ".")
+    try:
+        return f"{float(amount):g} BYN"
+    except ValueError:
+        return None
+
+
 async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args).strip()
     if not query:
@@ -376,13 +419,61 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + quote_plus(query)
         + "&rgn=all"
     )
-    await update.effective_message.reply_text(
-        f"🔎 Поиск на Kufar по всей Беларуси: {query}\n\n"
-        "Открой результаты по ссылке:\n"
-        f"{search_url}\n\n"
-        "Это первая версия: бот открывает поиск Kufar, "
-        "но пока не загружает карточки объявлений прямо в Telegram."
+    progress = await update.effective_message.reply_text(
+        f"🔎 Ищу «{query}» на Kufar по всей Беларуси..."
     )
+    try:
+        results = await asyncio.to_thread(fetch_kufar_page, search_url)
+        links = results.get("item_links", [])
+        if not links:
+            await progress.edit_text(
+                "Не удалось найти ссылки на отдельные объявления в HTML результатов.\\n"
+                f"Открой поиск вручную: {search_url}"
+            )
+            return
+
+        sent = 0
+        for link in links[:10]:
+            try:
+                page = await asyncio.to_thread(fetch_kufar_page, link)
+                meta = page.get("meta", {})
+                title = meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"
+                description = meta.get("og:description", "")
+                image_url = meta.get("og:image")
+                price = kufar_price(meta)
+                caption_parts = [f"🧥 {title[:220]}"]
+                if description:
+                    caption_parts.append(description[:350])
+                caption_parts.append(f"💰 {price or 'Цена не указана'}")
+                caption_parts.append(f"🔗 {link}")
+                caption = "\\n\\n".join(caption_parts)
+                if image_url and image_url.startswith(("https://", "http://")):
+                    try:
+                        await update.effective_message.reply_photo(
+                            photo=image_url,
+                            caption=caption[:1024],
+                        )
+                    except Exception:
+                        logger.warning("Не удалось отправить фото Kufar; отправляю текст", exc_info=True)
+                        await update.effective_message.reply_text(caption[:4000])
+                else:
+                    await update.effective_message.reply_text(caption[:4000])
+                sent += 1
+            except Exception:
+                logger.exception("Не удалось получить объявление Kufar: %s", link)
+
+        await progress.edit_text(
+            f"✅ Поиск завершён. Карточек отправлено: {sent}.\\n"
+            f"Найдено ссылок: {len(links)}.\\n"
+            f"Все результаты: {search_url}"
+        )
+    except Exception as exc:
+        logger.exception("Ошибка поиска Kufar")
+        await progress.edit_text(
+            f"❌ Не удалось обработать поиск Kufar: {type(exc).__name__}: {str(exc)[:180]}\\n"
+            f"Ссылка: {search_url}"
+        )
+
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
