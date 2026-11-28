@@ -478,8 +478,11 @@ def parse_natural_search(raw_text):
         except ValueError:
             budget = None
 
+    text = re.sub(
+        r"\b(?:найди|найти|ищи|поискать|подбери|подобрать|сними|снять|покажи|показать)\b",
+        " ", text, flags=re.IGNORECASE,
+    )
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
-    # Keep useful listing terms such as "снять квартиру посуточно".
     return text, budget, days, requested_city
 
 
