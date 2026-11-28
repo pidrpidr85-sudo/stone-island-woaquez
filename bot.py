@@ -545,7 +545,7 @@ def parse_natural_search(raw_text):
         r"\b(?:любая цена|любую цену|любой ценой|без ограничений(?: по цене)?|без лимита(?: по цене)?)\b",
         " ", text, flags=re.IGNORECASE,
     )
-    text = re.sub(r"^\s*(?:в|на|по|для)\s+|\s+(?:в|на|по|для)\s*$", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"^\s*(?:в|на|по|для)\s+|\s+(?:в|на|по|для)[,!.?]*\s*$", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
     return text, budget, days, requested_city
 
