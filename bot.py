@@ -14,7 +14,7 @@ from urllib.parse import quote_plus, urlencode, urlsplit, urlunsplit
 import feedparser
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, MenuButtonWebApp, ReplyKeyboardMarkup, Update, WebAppInfo)
 from telegram.constants import ChatType
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -297,6 +297,48 @@ def favorite_app_url(item):
     return WEBAPP_URL + "?" + urlencode(params)
 
 
+def main_menu_keyboard():
+    rows = [
+        [
+            InlineKeyboardButton("🔎 Поиск", callback_data="menu_search"),
+            InlineKeyboardButton("⭐ Избранное", web_app=WebAppInfo(url=WEBAPP_URL)),
+        ],
+        [
+            InlineKeyboardButton("⚙️ Настройки", callback_data="menu_settings"),
+            InlineKeyboardButton("ℹ️ О WOAQUEZ", callback_data="menu_about"),
+        ],
+    ]
+    return InlineKeyboardMarkup(rows)
+
+
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    if query.data == "menu_search":
+        await query.message.reply_text(
+            "🔎 Что будем искать?\n\n"
+            "Напиши запрос обычными словами — например: «Stone Island Off Dye в Минске» "
+            "или «сними квартиру посуточно до 250 BYN на два дня»."
+        )
+    elif query.data == "menu_settings":
+        await query.message.reply_text(
+            "⚙️ Настройки WOAQUEZ\n\n"
+            f"Уведомления: включены\n"
+            f"Поиск: Kufar, вся Беларусь\n"
+            f"Максимум карточек за поиск: {KUFAR_MAX_RESULTS}\n\n"
+            "Команда /stop отключает уведомления, /start включает их снова."
+        )
+    elif query.data == "menu_about":
+        await query.message.reply_text(
+            "🏝️ WOAQUEZ\n\n"
+            "Помощник для поиска объявлений на Kufar.\n"
+            "Просто нажми «Поиск» и напиши, что тебе нужно найти.\n"
+            "Понравившиеся объявления сохраняй в «Избранное»."
+        )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type != ChatType.PRIVATE:
@@ -305,15 +347,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers.add(chat.id)
     save_json(SUBSCRIBERS_FILE, sorted(subscribers))
     await update.effective_message.reply_text(
-        "WOAQUEZ\n"
+        "🏝️ WOAQUEZ\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
-        "Привет! Я помогу найти нужные объявления на Kufar.\n\n"
-        "Опиши, что ищешь, обычными словами — например, укажи товар или услугу, город и желаемую цену.\n\n"
-        "Интересные объявления можно сохранить в избранное и вернуться к ним позже.\n\n"
-        "Готов? Напиши, что будем искать.",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
-        ),
+        "Твой помощник по поиску объявлений на Kufar.\n"
+        "Выбери действие в меню ниже.",
+        reply_markup=main_menu_keyboard(),
     )
 
 
@@ -972,6 +1010,7 @@ def main():
         .build()
     )
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu_(search|settings|about)$"))
     application.add_handler(CommandHandler("stop", stop))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("check", check_now))
