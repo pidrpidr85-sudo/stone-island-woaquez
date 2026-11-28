@@ -1,43 +1,85 @@
-<!-- Pages publish trigger: static WOAQUEZ Mini App -->
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#101110">
+  <meta name="theme-color" content="#0b0d0b">
   <title>WOAQUEZ · Избранное</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root{color-scheme:dark;--bg:#101110;--panel:#1a1c1a;--muted:#929891;--line:#303530;--text:#f2f4ef;--accent:#b9d36b}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}
-    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
-    .brand{font-size:12px;letter-spacing:.24em;color:var(--accent);font-weight:800}.sub{color:var(--muted);font-size:12px;margin-top:5px}
-    h1{font-size:27px;letter-spacing:-.04em;margin:8px 0 4px}.count{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:7px 10px}
-    .search{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:13px 14px;font-size:14px;outline:none;margin:12px 0 18px}
-    #list{display:grid;gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-    .photo{width:100%;height:210px;object-fit:cover;background:#252925;display:block}.body{padding:13px}.title{font-weight:650;line-height:1.35;font-size:15px}.meta{color:var(--muted);font-size:13px;margin-top:8px}.price{color:var(--accent);font-weight:750;margin-top:8px}
-    .actions{display:flex;gap:8px;margin-top:13px}.actions a,.actions button{flex:1;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:11px 8px;font-size:13px;font-weight:650;background:#252925;color:var(--text)}
-    .actions .remove{color:#ffaaa4}.empty{border:1px dashed var(--line);border-radius:16px;padding:30px 18px;text-align:center;color:var(--muted);line-height:1.5}.empty strong{display:block;color:var(--text);font-size:17px;margin-bottom:8px}
-    footer{text-align:center;color:#697068;font-size:11px;margin-top:22px;letter-spacing:.08em}
+    :root{color-scheme:dark;--bg:#0b0d0b;--panel:#151915;--panel2:#1b211b;--line:#2b332b;--text:#f2f4ee;--muted:#929b90;--accent:#c6dc75;--accent2:#dce9ad;--danger:#f0a29b}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 85% -10%,#293321 0,transparent 38%),var(--bg);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom))}
+    .shell{max-width:680px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;padding:5px 0 24px;border-bottom:1px solid var(--line)}
+    .brand{font-size:13px;font-weight:900;letter-spacing:.28em;color:var(--accent)}
+    .brand-sub{font-size:10px;letter-spacing:.18em;color:#788174;margin-top:5px}
+    .status{border:1px solid #46513a;background:#20291b;color:var(--accent2);border-radius:999px;padding:7px 11px;font-size:11px;font-weight:700;letter-spacing:.04em}
+    .hero{padding:27px 0 20px}
+    .eyebrow{font-size:10px;letter-spacing:.22em;color:var(--accent);font-weight:800}
+    h1{font-size:34px;line-height:1;margin:10px 0 9px;letter-spacing:-.055em}
+    .intro{color:var(--muted);font-size:13px;line-height:1.5;max-width:420px}
+    .toolbar{display:grid;grid-template-columns:1fr auto;gap:9px;margin:18px 0 16px}
+    .search-wrap{position:relative}
+    .search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#879080;font-size:17px;pointer-events:none}
+    .search{width:100%;height:46px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:13px;padding:0 13px 0 39px;font-size:13px;outline:none}
+    .search:focus,.sort:focus{border-color:#81964d}
+    .sort{height:46px;max-width:145px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:13px;padding:0 10px;font-size:12px;outline:none}
+    .section-line{display:flex;align-items:center;justify-content:space-between;margin:0 1px 11px;color:var(--muted);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+    #count{color:var(--accent);font-weight:800;letter-spacing:0;text-transform:none}
+    #list{display:grid;grid-template-columns:1fr;gap:12px}
+    .card{display:grid;grid-template-columns:116px minmax(0,1fr);min-height:142px;background:linear-gradient(145deg,#191e19,#121512);border:1px solid var(--line);border-radius:17px;overflow:hidden}
+    .photo{width:116px;height:100%;min-height:142px;max-height:190px;object-fit:cover;background:#202620;display:block}
+    .photo-placeholder{width:116px;min-height:142px;display:grid;place-items:center;background:linear-gradient(145deg,#222a20,#111511);color:#71805c;font-size:27px}
+    .body{padding:13px 12px;min-width:0;display:flex;flex-direction:column}
+    .title{font-weight:700;line-height:1.35;font-size:13px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+    .meta{color:var(--muted);font-size:11px;margin-top:7px}
+    .price{color:var(--accent);font-size:15px;font-weight:850;margin-top:7px}
+    .actions{display:flex;align-items:center;gap:7px;margin-top:auto;padding-top:10px}
+    .actions a,.actions button{min-height:34px;display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:9px;padding:7px 9px;font-size:11px;font-weight:750;background:#222922;color:var(--text)}
+    .actions a{flex:1;background:var(--accent);border-color:var(--accent);color:#15190f}
+    .actions .remove{color:var(--danger);background:transparent}
+    .empty{border:1px dashed #3a4436;border-radius:17px;padding:34px 20px;text-align:center;color:var(--muted);line-height:1.55;background:#111511}
+    .empty-mark{font-size:30px;margin-bottom:12px}
+    .empty strong{display:block;color:var(--text);font-size:16px;margin-bottom:7px}
+    .empty small{display:block;margin-top:14px;color:#778171;font-size:11px}
+    .toast{position:sticky;top:calc(8px + env(safe-area-inset-top));z-index:5;margin:0 0 12px;padding:11px 13px;border:1px solid #586b39;border-radius:11px;background:#202b19;color:var(--accent2);font-size:12px;font-weight:700}
+    footer{text-align:center;color:#687164;font-size:10px;margin-top:25px;letter-spacing:.2em}
+    @media(min-width:560px){body{padding-left:22px;padding-right:22px}.card{grid-template-columns:150px minmax(0,1fr);min-height:160px}.photo,.photo-placeholder{width:150px;min-height:160px}.body{padding:16px}.title{font-size:14px}.actions a,.actions button{font-size:12px}}
+    @media(max-width:360px){.card{grid-template-columns:96px minmax(0,1fr)}.photo,.photo-placeholder{width:96px}.body{padding:10px}.sort{max-width:112px}}
   </style>
 </head>
 <body>
-  <header><div><div class="brand">WOAQUEZ</div><div class="sub">FINDER · YOUR COLLECTION</div></div><div class="count" id="count">0 сохранено</div></header>
-  <h1>Избранное</h1>
-  <div class="sub">Объявления, которые ты сохранил на Kufar</div>
-  <input id="filter" class="search" type="search" placeholder="Поиск по сохранённым объявлениям…">
-  <main id="list"><div class="empty">Загружаю избранное…</div></main>
-  <footer>WOAQUEZ FINDER</footer>
+  <div class="shell">
+    <header>
+      <div><div class="brand">WOAQUEZ</div><div class="brand-sub">FINDER · PRIVATE COLLECTION</div></div>
+      <div class="status">● LIVE COLLECTION</div>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">YOUR PERSONAL ARCHIVE</div>
+      <h1>Избранное<span style="color:var(--accent)">.</span></h1>
+      <div class="intro">Все объявления, которые ты сохранил на Kufar. Собирай интересные находки в одном месте.</div>
+    </section>
+    <div class="toolbar">
+      <div class="search-wrap"><span class="search-icon">⌕</span><input id="filter" class="search" type="search" placeholder="Найти в избранном…" autocomplete="off"></div>
+      <select id="sort" class="sort" aria-label="Сортировка"><option value="new">Сначала новые</option><option value="old">Сначала старые</option><option value="az">По названию</option></select>
+    </div>
+    <div class="section-line"><span>Сохранённые объявления</span><span id="count">0 / 0</span></div>
+    <div id="notice" hidden></div>
+    <main id="list"><div class="empty"><div class="empty-mark">🏝️</div><strong>Собираем твою коллекцию</strong>Загружаю сохранённые объявления…</div></main>
+    <footer>WOAQUEZ FINDER · EST. 2026</footer>
+  </div>
 <script>
 (() => {
   const tg = window.Telegram && window.Telegram.WebApp;
-  if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#101110"); tg.setBackgroundColor("#101110"); } catch (_) {} }
+  if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor("#0b0d0b"); tg.setBackgroundColor("#0b0d0b"); } catch (_) {} }
   const cloud = tg && tg.CloudStorage;
   const list = document.getElementById("list");
   const count = document.getElementById("count");
   const filter = document.getElementById("filter");
+  const sort = document.getElementById("sort");
+  const notice = document.getElementById("notice");
   let items = [];
-
   const cloudCall = (method, ...args) => new Promise((resolve, reject) => {
     if (!cloud || typeof cloud[method] !== "function") return reject(new Error("CloudStorage недоступно"));
     cloud[method](...args, (error, result) => error ? reject(error) : resolve(result));
@@ -66,27 +108,36 @@
   const removeOne = async id => {
     try { await cloudCall("removeItem", "fav_" + id); }
     catch (_) {
-      const old = JSON.parse(localStorage.getItem("woaquez_favorites") || "[]").filter(x => x.id !== id);
+      const old = JSON.parse(localStorage.getItem("woaquez_favorites") || "[]").filter(x => String(x.id) !== String(id));
       localStorage.setItem("woaquez_favorites", JSON.stringify(old));
     }
-    items = items.filter(x => x.id !== id); render();
+    items = items.filter(x => String(x.id) !== String(id));
+    try { if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred("light"); } catch (_) {}
+    render();
   };
-  const escapeHtml = value => String(value || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const esc = value => String(value || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const showNotice = message => {
+    notice.hidden = false;
+    notice.className = "toast";
+    notice.textContent = message;
+  };
   const render = () => {
     const q = filter.value.trim().toLowerCase();
-    const shown = items.filter(x => (x.title + " " + x.city + " " + x.price).toLowerCase().includes(q));
-    count.textContent = items.length + " сохранено";
+    const shown = items.filter(x => [x.title,x.city,x.price].join(" ").toLowerCase().includes(q));
+    if (sort.value === "az") shown.sort((a,b) => String(a.title).localeCompare(String(b.title),"ru"));
+    else shown.sort((a,b) => (Number(b.savedAt)||0) - (Number(a.savedAt)||0) * (sort.value === "new" ? 1 : -1));
+    count.textContent = q ? shown.length + " из " + items.length : items.length + (items.length === 1 ? " сохранено" : " сохранено");
     if (!shown.length) {
-      list.innerHTML = '<div class="empty"><strong>' + (items.length ? "Ничего не найдено" : "Пока здесь пусто") + '</strong>' + (items.length ? "Попробуй изменить запрос." : "Нажимай 🏝️ «В избранное» на карточках Kufar — объявления появятся здесь.") + '</div>';
+      list.innerHTML = '<div class="empty"><div class="empty-mark">' + (items.length ? "⌕" : "🏝️") + '</div><strong>' + (items.length ? "Ничего не найдено" : "Здесь пока пусто") + '</strong>' + (items.length ? "Попробуй другой запрос." : "Нажимай «🏝️ В избранное» на карточках Kufar — они появятся здесь.") + '<small>WOAQUEZ · YOUR FINDS, YOUR RULES</small></div>';
       return;
     }
     list.innerHTML = shown.map(x => '<article class="card">' +
-      (x.image ? '<img class="photo" src="' + escapeHtml(x.image) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '') +
-      '<div class="body"><div class="title">' + escapeHtml(x.title) + '</div>' +
-      '<div class="meta">📍 ' + escapeHtml(x.city || "Город не указан") + '</div>' +
-      '<div class="price"> ' + escapeHtml(x.price || "Цена не указана") + '</div>' +
-      '<div class="actions"><a href="' + escapeHtml(x.link) + '" target="_blank" rel="noopener">Открыть Kufar ↗</a>' +
-      '<button class="remove" data-remove="' + escapeHtml(x.id) + '">Убрать ✕</button></div></div></article>').join("");
+      (x.image ? '<img class="photo" src="' + esc(x.image) + '" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=&quot;photo-placeholder&quot;>🏝️</div>\'">' : '<div class="photo-placeholder">🏝️</div>') +
+      '<div class="body"><div class="title">' + esc(x.title || "Объявление Kufar") + '</div>' +
+      '<div class="meta">📍 ' + esc(x.city || "Город не указан") + '</div>' +
+      '<div class="price">' + esc(x.price || "Цена не указана") + '</div>' +
+      '<div class="actions"><a href="' + esc(x.link) + '" target="_blank" rel="noopener noreferrer">Открыть Kufar ↗</a>' +
+      '<button class="remove" data-remove="' + esc(x.id) + '" aria-label="Удалить из избранного">Убрать ×</button></div></div></article>').join("");
     list.querySelectorAll("[data-remove]").forEach(button => button.addEventListener("click", () => removeOne(button.dataset.remove)));
   };
   const params = new URLSearchParams(location.search);
@@ -94,20 +145,19 @@
   (async () => {
     items = await readAll();
     if (id && /^\d+$/.test(id)) {
-      const item = {id, title:params.get("title") || "Объявление Kufar", city:params.get("city") || "Город не указан", price:params.get("price") || "Цена не указана", link:params.get("link") || ("https://www.kufar.by/item/" + id), image:params.get("image") || ""};
+      const item = {id, title:params.get("title") || "Объявление Kufar", city:params.get("city") || "Город не указан", price:params.get("price") || "Цена не указана", link:params.get("link") || ("https://www.kufar.by/item/" + id), image:params.get("image") || "", savedAt:Date.now()};
       if (/^https:\/\/www\.kufar\.by\/item\/\d+$/.test(item.link)) {
         await writeOne(item);
         items = await readAll();
-        const notice = document.createElement("div");
-        notice.className = "sub"; notice.style.color = "var(--accent)"; notice.style.margin = "0 0 12px";
-        notice.textContent = "✓ Объявление добавлено в избранное";
-        list.before(notice);
+        showNotice("✓ Объявление добавлено в твоё избранное");
+        try { if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success"); } catch (_) {}
       }
       history.replaceState({}, "", location.pathname);
     }
     render();
   })();
   filter.addEventListener("input", render);
+  sort.addEventListener("change", render);
 })();
 </script>
 </body>
