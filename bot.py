@@ -301,9 +301,9 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + "&rgn=all"
     )
     await update.effective_message.reply_text(
-        f"🔎 Поиск на Kufar по всей Беларуси: {query}\\n\\n"
-        "Открой результаты по ссылке:\\n"
-        f"{search_url}\\n\\n"
+        f"🔎 Поиск на Kufar по всей Беларуси: {query}\n\n"
+        "Открой результаты по ссылке:\n"
+        f"{search_url}\n\n"
         "Это первая версия: бот открывает поиск Kufar, "
         "но пока не загружает карточки объявлений прямо в Telegram."
     )
@@ -360,8 +360,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start — включить уведомления\n"
         "/stop — отключить уведомления\n"
         "/status — настройки бота\n"
-        "/check — проверить RSS-источники\\n"
-        "/search <запрос> — найти на Kufar по всей Беларуси\\n"
+        "/check — проверить RSS-источники\n"
+        "/search <запрос> — найти на Kufar по всей Беларуси\n"
         "Пример: /search Stone Island Off Dye\n"
         "/help — список команд"
     )
