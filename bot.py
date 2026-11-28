@@ -385,9 +385,9 @@ async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def kufar_city(meta):
     text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
-    match = re.search(r"\\bкупить\\s+в\\s+(.+?)\\s+на\\s+Куфаре\\b", text, re.IGNORECASE)
+    match = re.search(r"\bкупить\s+в\s+(.+?)\s+на\s+Куфаре\b", text, re.IGNORECASE)
     if not match:
-        match = re.search(r"\\bв\\s+([А-ЯЁ][А-Яа-яЁё-]{2,}(?:\\s+[А-ЯЁ][А-Яа-яЁё-]{2,})?)\\b", text)
+        match = re.search(r"\bв\s+([А-ЯЁ][А-Яа-яЁё-]{2,}(?:\s+[А-ЯЁ][А-Яа-яЁё-]{2,})?)\b", text)
     if not match:
         return None
     city = clean_text(match.group(1)).strip(" ,.-")
