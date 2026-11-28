@@ -538,13 +538,14 @@ def parse_natural_search(raw_text):
         " ", text, flags=re.IGNORECASE,
     )
     text = re.sub(
-        r"\b(?:мне|пожалуйста|объявления?|варианты|в городе|городе|по всей беларуси|всей беларуси)\b",
+        r"\b(?:мне|пожалуйста|объявления?|варианты|вообще|в городе|городе|по всей беларуси|всей беларуси)\b",
         " ", text, flags=re.IGNORECASE,
     )
     text = re.sub(
         r"\b(?:любая цена|любую цену|любой ценой|без ограничений(?: по цене)?|без лимита(?: по цене)?)\b",
         " ", text, flags=re.IGNORECASE,
     )
+    text = re.sub(r"^\s*(?:в|на|по|для)\s+|\s+(?:в|на|по|для)\s*$", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
     return text, budget, days, requested_city
 
