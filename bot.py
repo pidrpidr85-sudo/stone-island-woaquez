@@ -300,19 +300,21 @@ def favorite_app_url(item):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type != ChatType.PRIVATE:
-        await update.effective_message.reply_text("Открой личный чат с ботом и отправь /start.")
-        return
-    subscribers.add(chat.id)
-    save_json(SUBSCRIBERS_FILE, sorted(subscribers))
-    await update.effective_message.reply_text(
-        "🏝 WOAQUEZ Finder включён!\n\n"
-        "RSS-уведомления Stone Island и C.P. Company активны "
-        f"(лимит {MAX_EUR:.0f} €).\n\n"
-        "Чтобы искать на Kufar, просто напиши запрос обычным сообщением — команды не нужны.\n"
-        "Например: «Сними квартиру посуточно до 250 BYN на два дня».\n\n"
-        "Команды: /status, /check, /stop, /help.",
+        await update.effective_message.reply_text(
+        "🏝️ ДОБРО ПОЖАЛОВАТЬ В WOAQUEZ!\\n"
+        "━━━━━━━━━━━━━━━━━━\\n\\n"
+        "Твой помощник по поиску объявлений уже готов к работе.\\n\\n"
+        "🔎 <b>Поиск без команд</b>\\n"
+        "Просто напиши, что нужно найти. Например: «Сними квартиру посуточно до 250 BYN на два дня».\\n\\n"
+        "🔔 <b>Уведомления</b>\\n"
+        f"RSS-уведомления Stone Island и C.P. Company активны (лимит {MAX_EUR:.0f} €).\\n\\n"
+        "⭐ <b>Избранное</b>\\n"
+        "Сохраняй интересные объявления и возвращайся к ним в любой момент.\\n\\n"
+        "━━━━━━━━━━━━━━━━━━\\n"
+        "Напиши свой первый запрос — WOAQUEZ начнёт поиск!",
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🏝️ Открыть избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
+            [[InlineKeyboardButton("⭐ Открыть избранное", web_app=WebAppInfo(url=WEBAPP_URL))]]
         ),
     )
 
