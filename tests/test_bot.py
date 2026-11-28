@@ -73,6 +73,15 @@ class NaturalSearchTests(unittest.TestCase):
         self.assertIsNone(days)
         self.assertEqual(city, "Брест")
 
+
+    def test_all_belarus_phrase_is_not_sent_as_search_keyword(self):
+        from bot import parse_natural_search
+        query, budget, days, city = parse_natural_search(
+            "Найди Stone Island Off Dye по всей Беларуси"
+        )
+        self.assertEqual(query, "Stone Island Off Dye")
+        self.assertIsNone(city)
+
     def test_numeric_budget_without_currency(self):
         from bot import parse_natural_search
         query, budget, days, city = parse_natural_search(
