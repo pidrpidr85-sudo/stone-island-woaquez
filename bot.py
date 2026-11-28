@@ -342,7 +342,7 @@ def normalize_kufar_item_link(value):
         return ""
     if (parts.hostname or "").lower() not in ("kufar.by", "www.kufar.by"):
         return ""
-    if not re.fullmatch(r"/item/\\d+/?", parts.path):
+    if not re.fullmatch(r"/item/\d+/?", parts.path):
         return ""
     return urlunsplit(("https", "www.kufar.by", parts.path.rstrip("/"), "", ""))
 
@@ -369,7 +369,7 @@ def fetch_kufar_page(url):
             link = normalize_kufar_item_link(href)
             if link and link not in item_links:
                 item_links.append(link)
-        for path in re.findall(r"/item/\\d+", page):
+        for path in re.findall(r"/item/\d+", page):
             link = normalize_kufar_item_link(path)
             if link and link not in item_links:
                 item_links.append(link)
@@ -493,6 +493,47 @@ def parse_natural_search(raw_text):
         for canonical, pattern in BELARUS_CITY_FORMS.values():
             if canonical == requested_city:
                 text = re.sub(
+                    r"(?<![а-я])" + pattern + r"(?![а-я])",
+                    " ",
+                    text,
+                    flags=re.IGNORECASE,
+                )
+                break
+
+    days = None
+    day_match = re.search(
+        r"\b(?:на\s*)?(один|одну|два|две|три|четыре|пять|[1-9]\d*)\s*(?:день|дня|дней|сутки|суток)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if day_match:
+        day_word = day_match.group(1).lower()
+        day_numbers = {
+            "один": 1, "одну": 1, "два": 2, "две": 2,
+            "три": 3, "четыре": 4, "пять": 5,
+        }
+        days = day_numbers.get(day_word)
+        if days is None:
+            try:
+                days = int(day_word)
+            except ValueError:
+                days = None
+        text = text[:day_match.start()] + " " + text[day_match.end():]
+
+    budget = None
+    budget_match = re.search(
+        r"\b(?:до|максимум|бюджет(?:ом)?\s*)\s*([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\b",
+        text,
+        re.IGNORECASE,
+    )
+    if budget_match:
+        try:
+            budget = float(re.sub(r"\s+", "", budget_match.group(1)).replace(",", "."))
+            text = text[:budget_match.start()] + " " + text[budget_match.end():]
+        except ValueError:
+            budget = None
+
+    text = re.sub(
         r"\b(?:найди|найти|ищи|поискать|подбери|подобрать|сними|снять|покажи|показать)\b",
         " ", text, flags=re.IGNORECASE,
     )
@@ -505,7 +546,6 @@ def parse_natural_search(raw_text):
         " ", text, flags=re.IGNORECASE,
     )
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
-
     return text, budget, days, requested_city
 
 
