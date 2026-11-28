@@ -101,6 +101,47 @@ class NaturalSearchTests(unittest.TestCase):
         self.assertEqual(city, "Минск")
 
 
+class KufarTitleFilteringTests(unittest.TestCase):
+    def test_rejects_off_dye_title_with_multiple_brands_in_parentheses(self):
+        from bot import is_off_dye_keyword_spam
+        title = "Худи Jordan off dye (Nike adidas stone island), цена 120 р."
+        self.assertTrue(is_off_dye_keyword_spam(title, "Stone Island Off Dye"))
+
+    def test_keeps_off_dye_title_with_simple_authenticity_note(self):
+        from bot import is_off_dye_keyword_spam
+        self.assertFalse(
+            is_off_dye_keyword_spam(
+                "Stone Island Off Dye (оригинал)", "Stone Island Off Dye"
+            )
+        )
+
+    def test_filter_does_not_affect_other_searches(self):
+        from bot import is_off_dye_keyword_spam
+        self.assertFalse(
+            is_off_dye_keyword_spam(
+                "Худи Jordan (Nike adidas stone island)", "худи Jordan"
+            )
+        )
+
+    def test_removes_kufar_listing_number_from_title(self):
+        from bot import clean_kufar_title
+        self.assertEqual(
+            clean_kufar_title(
+                "Худи Jordan off dye - Объявление №1097622249"
+            ),
+            "Худи Jordan off dye",
+        )
+
+    def test_removes_kufar_seo_suffix_and_number(self):
+        from bot import clean_kufar_title
+        self.assertEqual(
+            clean_kufar_title(
+                "Худи Jordan off dye, цена 120 р. купить в Гродно на Куфаре - Объявление №1097622249"
+            ),
+            "Худи Jordan off dye",
+        )
+
+
 class KufarParsingTests(unittest.TestCase):
     def test_city_forms(self):
         from bot import detect_belarus_city
