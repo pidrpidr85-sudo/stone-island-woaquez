@@ -199,6 +199,16 @@ async def send_item(bot, item):
     return delivered > 0
 
 
+def feed_error_context(raw, exc):
+    line = getattr(exc, "getLineNumber", lambda: 0)()
+    column = getattr(exc, "getColumnNumber", lambda: 0)()
+    lines = raw.decode("utf-8", errors="replace").splitlines()
+    if not line or line > len(lines):
+        return ""
+    source_line = lines[line - 1]
+    return clean_text(source_line[max(0, column - 70):column + 100])[:180]
+
+
 async def check_feeds(bot):
     global last_check_stats
     if not FEED_URLS:
@@ -212,7 +222,7 @@ async def check_feeds(bot):
             try:
                 raw = await asyncio.to_thread(download_feed, url)
                 parsed = feedparser.parse(raw)
-                info = {"bytes": len(raw), "title": clean_text(parsed.feed.get("title", ""))[:100], "bozo": str(parsed.bozo_exception)[:180] if parsed.bozo else ""}
+                info = {"bytes": len(raw), "title": clean_text(parsed.feed.get("title", ""))[:100], "bozo": str(parsed.bozo_exception)[:180] if parsed.bozo else "", "error_context": feed_error_context(raw, parsed.bozo_exception) if parsed.bozo else ""}
                 stats["feed_info"].append(info)
                 if parsed.bozo:
                     logger.warning("RSS вернул предупреждение для %s: %s", url, parsed.bozo_exception)
@@ -309,6 +319,8 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 details += f"\nНазвание ленты: {info['title']}"
             if info.get("bozo"):
                 details += f"\nПредупреждение RSS: {info['bozo']}"
+            if info.get("error_context"):
+                details += f"\nФрагмент у ошибки: {info['error_context']}"
         for error in stats.get("error_info", []):
             details += f"\nОшибка: {error}"
         await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.{details}")
