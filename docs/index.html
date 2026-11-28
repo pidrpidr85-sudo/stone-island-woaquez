@@ -42,24 +42,43 @@ footer{text-align:center;color:#a0a0a7;font-size:9px;margin-top:27px;letter-spac
 @media(max-width:360px){.card{grid-template-columns:94px minmax(0,1fr)}.photo,.photo-placeholder{width:94px}.body{padding:10px}.sort{max-width:112px}h1{font-size:34px}}
 @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#000;--panel:rgba(28,28,30,.92);--text:#f5f5f7;--accent:#0a84ff;--danger:#ff453a}body{background:linear-gradient(180deg,#17191e 0,#000 300px);color:var(--text)}.brand,.price,.empty strong{color:#f5f5f7}.brand-sub,.intro,.section-line,.meta{color:#98989f}.status{background:rgba(10,132,255,.15);border-color:rgba(10,132,255,.25);color:#64b5ff}.search,.sort{background:rgba(44,44,46,.9);border-color:rgba(84,84,88,.45);color:#f5f5f7}.card{background:rgba(28,28,30,.92);border-color:rgba(84,84,88,.35)}.photo-placeholder{background:linear-gradient(145deg,#343438,#222226);color:#92929a}.actions a{background:#0a84ff;border-color:#0a84ff}.actions button{background:#2c2c2e;color:#e5e5ea;border-color:#48484a}.actions .remove{color:#ff6961;background:rgba(255,69,58,.12);border-color:rgba(255,69,58,.2)}.empty{background:rgba(28,28,30,.9);border-color:rgba(84,84,88,.35)}.empty strong{color:#f5f5f7}.empty small,footer{color:#77777e}.toast{background:rgba(27,58,37,.95);border-color:rgba(48,209,88,.25);color:#75df91}}
 
-#splash{position:fixed;inset:0;z-index:9999;background:#08090d;display:grid;place-items:center;opacity:1;visibility:visible;transition:opacity .55s ease,visibility .55s ease}
-#splash img{width:100%;height:100%;object-fit:cover;display:block}
-#splash.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
-#splash .splash-mark{position:absolute;left:0;right:0;bottom:calc(42px + env(safe-area-inset-bottom));text-align:center;color:#fff;font:800 13px -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:.28em;text-shadow:0 2px 14px #000}
+  
+/* Refined WOAQUEZ finish */
+header{padding-bottom:14px}
+.brand{font-size:16px;letter-spacing:.22em}
+.brand-sub{font-size:9px;letter-spacing:.17em}
+.status{font-size:9px;letter-spacing:.08em;padding:8px 11px}
+.hero{padding-top:27px;padding-bottom:15px}
+h1{font-size:42px;letter-spacing:-.07em}
+.intro{font-size:14px;line-height:1.55;max-width:390px}
+.toolbar{margin-top:20px;margin-bottom:22px}
+.search,.sort{height:48px;border-radius:15px}
+.card{border-radius:19px;transition:transform .16s ease,box-shadow .16s ease}
+.card:active{transform:scale(.992)}
+.photo,.photo-placeholder{min-height:145px}
+.body{padding:14px}
+.title{font-size:13.5px;line-height:1.4}
+.price{font-size:17px}
+.actions a,.actions button{min-height:36px;border-radius:11px}
+.actions a{letter-spacing:.01em}
+.empty{padding:42px 22px}
+.empty-mark{font-size:28px}
+.empty small{letter-spacing:.13em}
+footer{padding-bottom:5px}
+@media(min-width:560px){h1{font-size:48px}.card{min-height:165px}.photo,.photo-placeholder{min-height:165px}}
 
   </style>
 </head>
 <body>
-  <div id="splash" aria-label="Загрузка WOAQUEZ"><img src="./54E6830B-FDE0-4A4A-9B4E-5743160D0D3A.png" alt=""><div class="splash-mark">WOAQUEZ</div></div>
   <div class="shell">
     <header>
-      <div><div class="brand">WOAQUEZ</div><div class="brand-sub">FINDER · PRIVATE COLLECTION</div></div>
-      <div class="status">● LIVE COLLECTION</div>
+      <div><div class="brand">WOAQUEZ</div><div class="brand-sub">YOUR PERSONAL FINDS</div></div>
+      <div class="status">ИЗБРАННОЕ</div>
     </header>
     <section class="hero">
-      <div class="eyebrow">WOAQUEZ COMMUNITY</div>
+      <div class="eyebrow">ТВОЯ КОЛЛЕКЦИЯ</div>
       <h1 id="pageTitle">Избранное<span style="color:var(--accent)">.</span></h1>
-      <div class="intro" id="pageIntro">Твоя личная коллекция сохранённых объявлений.</div>
+      <div class="intro" id="pageIntro">Всё интересное — в одном месте. Сохраняй объявления с Kufar, чтобы быстро вернуться к ним.</div>
     </section>
     <section id="favoritesPanel" class="panel">
     <div class="toolbar">
@@ -68,7 +87,7 @@ footer{text-align:center;color:#a0a0a7;font-size:9px;margin-top:27px;letter-spac
     </div>
     <div class="section-line"><span>Сохранённые объявления</span><span id="count">0 / 0</span></div>
     <div id="notice" hidden></div>
-    <main id="list"><div class="empty"><div class="empty-mark">🏝️</div><strong>Собираем твою коллекцию</strong>Загружаю сохранённые объявления…</div></main>
+    <main id="list"><div class="empty"><div class="empty-mark">🏝️</div><strong>Загружаем избранное</strong>Загружаю сохранённые объявления…</div></main>
     </section>
     <footer>WOAQUEZ FINDER · EST. 2026</footer>
   </div>
@@ -129,9 +148,9 @@ footer{text-align:center;color:#a0a0a7;font-size:9px;margin-top:27px;letter-spac
     const shown = items.filter(x => [x.title,x.city,x.price].join(" ").toLowerCase().includes(q));
     if (sort.value === "az") shown.sort((a,b) => String(a.title).localeCompare(String(b.title),"ru"));
     else shown.sort((a,b) => sort.value === "new" ? (Number(b.savedAt)||0) - (Number(a.savedAt)||0) : (Number(a.savedAt)||0) - (Number(b.savedAt)||0));
-    count.textContent = q ? shown.length + " из " + items.length : items.length + (items.length === 1 ? " сохранено" : " сохранено");
+    count.textContent = q ? shown.length + " из " + items.length : items.length + " " + (items.length === 1 ? "объявление" : items.length >= 2 && items.length <= 4 ? "объявления" : "объявлений");
     if (!shown.length) {
-      list.innerHTML = '<div class="empty"><div class="empty-mark">' + (items.length ? "⌕" : "🏝️") + '</div><strong>' + (items.length ? "Ничего не найдено" : "Здесь пока пусто") + '</strong>' + (items.length ? "Попробуй другой запрос." : "Нажимай «🏝️ В избранное» на карточках Kufar — они появятся здесь.") + '<small>WOAQUEZ · YOUR FINDS, YOUR RULES</small></div>';
+      list.innerHTML = '<div class="empty"><div class="empty-mark">' + (items.length ? "⌕" : "🏝️") + '</div><strong>' + (items.length ? "Ничего не найдено" : "Здесь пока пусто") + '</strong>' + (items.length ? "Попробуй другой запрос." : "Сохраняй понравившиеся объявления на Kufar — они появятся здесь.") + '<small>WOAQUEZ · YOUR FINDS, YOUR RULES</small></div>';
       return;
     }
     list.innerHTML = shown.map(x => '<article class="card">' +
@@ -319,7 +338,6 @@ footer{text-align:center;color:#a0a0a7;font-size:9px;margin-top:27px;letter-spac
       history.replaceState({}, "", location.pathname);
     }
     render();
-    window.setTimeout(() => { const splash = document.getElementById("splash"); if (splash) splash.classList.add("is-hidden"); }, 2400);
   })();
   filter.addEventListener("input", render);
   sort.addEventListener("change", render);
