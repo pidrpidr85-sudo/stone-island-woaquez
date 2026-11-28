@@ -622,14 +622,14 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
         inspected = await asyncio.gather(
             *(inspect_listing(link, semaphore) for link in links_to_check)
         )
+        fetch_errors = sum(1 for item in inspected if item.get("error"))
+        checked = len(inspected) - fetch_errors
 
         for item in inspected:
             if sent >= KUFAR_MAX_RESULTS:
                 break
             if item.get("error"):
-                fetch_errors += 1
                 continue
-            checked += 1
             link = item["link"]
             title = item["title"]
             image_url = item["image"]
