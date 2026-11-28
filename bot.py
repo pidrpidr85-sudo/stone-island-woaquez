@@ -28,7 +28,8 @@ CHECK_INTERVAL = max(60, int(os.getenv("POLL_SECONDS", "600")))
 REQUEST_TIMEOUT = max(5, int(os.getenv("RSS_TIMEOUT_SECONDS", "20")))
 KUFAR_MAX_CHECKS = min(100, max(1, int(os.getenv("KUFAR_MAX_CHECKS", "30"))))
 KUFAR_MAX_RESULTS = min(20, max(1, int(os.getenv("KUFAR_MAX_RESULTS", "10"))))
-KUFAR_CONCURRENCY = min(8, max(1, int(os.getenv("KUFAR_CONCURRENCY", "5"))))
+KUFAR_CONCURRENCY = min(4, max(1, int(os.getenv("KUFAR_CONCURRENCY", "2"))))
+KUFAR_FETCH_ATTEMPTS = 3
 SUBSCRIBERS_FILE = Path(os.getenv("SUBSCRIBERS_FILE", "subscribers.json"))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", "seen.json"))
 
@@ -646,21 +647,37 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
 
         async def inspect_listing(link, semaphore):
             async with semaphore:
-                try:
-                    page = await asyncio.to_thread(fetch_kufar_page, link)
-                    meta = page.get("meta", {})
-                    page_text = page.get("page_text", "")
-                    return {
-                        "link": link,
-                        "title": clean_kufar_title(meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"),
-                        "image": meta.get("og:image"),
-                        "price": kufar_price(meta, page_text),
-                        "city": kufar_city(meta, page_text),
-                        "error": None,
-                    }
-                except Exception as exc:
-                    logger.warning("Не удалось проверить объявление %s: %s", link, exc)
-                    return {"link": link, "error": exc}
+                last_error = None
+                for attempt in range(KUFAR_FETCH_ATTEMPTS):
+                    try:
+                        page = await asyncio.to_thread(fetch_kufar_page, link)
+                        meta = page.get("meta", {})
+                        page_text = page.get("page_text", "")
+                        return {
+                            "link": link,
+                            "title": clean_kufar_title(meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"),
+                            "image": meta.get("og:image"),
+                            "price": kufar_price(meta, page_text),
+                            "city": kufar_city(meta, page_text),
+                            "error": None,
+                        }
+                    except urllib.error.HTTPError as exc:
+                        last_error = exc
+                        # Retry only temporary server/rate-limit responses. A 403/404
+                        # is not transient and should not be hammered with more requests.
+                        if exc.code not in (408, 425, 429, 500, 502, 503, 504):
+                            break
+                    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                        last_error = exc
+                    except Exception as exc:
+                        last_error = exc
+                        break
+
+                    if attempt + 1 < KUFAR_FETCH_ATTEMPTS:
+                        await asyncio.sleep(1.5 * (attempt + 1))
+
+                logger.warning("Не удалось проверить объявление %s: %s", link, last_error)
+                return {"link": link, "error": last_error}
 
         links_to_check = links[:KUFAR_MAX_CHECKS]
         semaphore = asyncio.Semaphore(KUFAR_CONCURRENCY)
@@ -749,7 +766,17 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
             summary += "\nОграничения по цене нет."
         if fetch_errors:
             summary += f"\nНе удалось загрузить карточки: {fetch_errors}."
-        summary += f"\nПроверено ссылок: {len(links_to_check)}; параллельных загрузок: {KUFAR_CONCURRENCY}."
+            error_counts = {}
+            for failed in inspected:
+                error = failed.get("error")
+                if not error:
+                    continue
+                label = f"HTTP {error.code}" if isinstance(error, urllib.error.HTTPError) else type(error).__name__
+                error_counts[label] = error_counts.get(label, 0) + 1
+            if error_counts:
+                details = ", ".join(f"{label}: {count}" for label, count in sorted(error_counts.items()))
+                summary += f"\nПричины ошибок: {details}."
+        summary += f"\nПроверено ссылок: {len(links_to_check)}; параллельных загрузок: {KUFAR_CONCURRENCY}; повторов при временных ошибках: до {KUFAR_FETCH_ATTEMPTS - 1}."
         summary += f"\nВсе результаты: {search_url}"
         await progress.edit_text(summary)
     except Exception as exc:
