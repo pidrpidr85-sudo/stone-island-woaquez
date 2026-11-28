@@ -277,10 +277,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers.add(chat.id)
     save_json(SUBSCRIBERS_FILE, sorted(subscribers))
     await update.effective_message.reply_text(
-        "🏝 Stone Island Hunter включён!\n\n"
-        "Ищу Stone Island и C.P. Company до "
-        f"{MAX_EUR:.0f} €.\n"
-        "Уведомления включены. Команды: /status, /check, /stop, /help."
+        "🏝 WOAQUEZ Finder включён!\n\n"
+        "RSS-уведомления Stone Island и C.P. Company активны "
+        f"(лимит {MAX_EUR:.0f} €).\n\n"
+        "Чтобы искать на Kufar, просто напиши запрос обычным сообщением — команды не нужны.\n"
+        "Например: «Сними квартиру посуточно до 250 BYN на два дня».\n\n"
+        "Команды: /status, /check, /stop, /help."
     )
 
 
@@ -776,9 +778,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/stop — отключить уведомления\n"
         "/status — настройки бота\n"
         "/check — проверить RSS-источники\n"
-        "/search <запрос> — найти на Kufar по всей Беларуси\n"
+        "/search <запрос> — поиск на Kufar командой (необязательно)\n"
         "/testkufar — проверить получение данных Kufar\n"
-        "Пример: /search Stone Island Off Dye\n"
+        "Можно просто написать запрос сообщением, например:\n"
+        "«Найди Stone Island Off Dye в Минске, любая цена»\n"
+        "«Сними квартиру посуточно до 250 BYN на два дня»\n"
         "/help — список команд"
     )
 
