@@ -385,20 +385,7 @@ async def test_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def kufar_city(meta):
     text = " ".join((meta.get("og:title", ""), meta.get("og:description", "")))
-    match = re.search(r"\bкупить\s+в\s+(.+?)\s+на\s+Куфаре\b", text, re.IGNORECASE)
-    if not match:
-        match = re.search(r"\bв\s+([А-ЯЁ][А-Яа-яЁё-]{2,}(?:\s+[А-ЯЁ][А-Яа-яЁё-]{2,})?)\b", text)
-    if not match:
-        return None
-    city = clean_text(match.group(1)).strip(" ,.-")
-    city_forms = {
-        "Минске": "Минск", "Гродно": "Гродно", "Бресте": "Брест",
-        "Витебске": "Витебск", "Гомеле": "Гомель", "Могилёве": "Могилёв",
-        "Могилеве": "Могилёв", "Барановичах": "Барановичи",
-        "Борисове": "Борисов", "Пинске": "Пинск", "Орше": "Орша",
-        "Молодечно": "Молодечно", "Жодино": "Жодино", "Солигорске": "Солигорск",
-    }
-    return city_forms.get(city, city)
+    return detect_belarus_city(text)
 
 
 def kufar_price(meta):
@@ -424,8 +411,40 @@ def kufar_price(meta):
         return None
 
 
+BELARUS_CITY_FORMS = {
+    "минск": ("Минск", r"Минск(?:е|а|у|ом)?"),
+    "гродно": ("Гродно", r"Гродно"),
+    "брест": ("Брест", r"Брест(?:е|а|у|ом)?"),
+    "витебск": ("Витебск", r"Витебск(?:е|а|у|ом)?"),
+    "гомель": ("Гомель", r"Гомел(?:ь|е|я|ю|ем)"),
+    "могилев": ("Могилёв", r"Могил[её]в(?:е|а|у|ом)?"),
+    "барановичи": ("Барановичи", r"Баранович(?:и|ах|ам|ами)"),
+    "борисов": ("Борисов", r"Борисов(?:е|а|у|ом)?"),
+    "пинск": ("Пинск", r"Пинск(?:е|а|у|ом)?"),
+    "орша": ("Орша", r"Орш(?:а|е|и|у|ей)"),
+    "молодечно": ("Молодечно", r"Молодечн(?:о|е)"),
+    "жодино": ("Жодино", r"Жодино"),
+    "солигорск": ("Солигорск", r"Солигорск(?:е|а|у|ом)?"),
+}
+
+
+def detect_belarus_city(value):
+    value = clean_text(value).lower().replace("ё", "е")
+    for canonical, pattern in BELARUS_CITY_FORMS.values():
+        match = re.search(r"(?<![а-я])" + pattern.lower().replace("ё", "е") + r"(?![а-я])", value, re.IGNORECASE)
+        if match:
+            return canonical
+    return None
+
+
 def parse_natural_search(raw_text):
     text = clean_text(raw_text)
+    requested_city = detect_belarus_city(text)
+    if requested_city:
+        for canonical, pattern in BELARUS_CITY_FORMS.values():
+            if canonical == requested_city:
+                text = re.sub(r"(?<![а-я])" + pattern + r"(?![а-я])", " ", text, flags=re.IGNORECASE)
+                break
     days = None
     day_match = re.search(
         r"\b(?:на\s*)?(один|одну|два|две|три|четыре|пять|[1-9]\d*)\s*(?:день|дня|дней|сутки|суток)\b",
@@ -461,19 +480,20 @@ def parse_natural_search(raw_text):
 
     text = re.sub(r"\s+", " ", text).strip(" ,.!?")
     # Keep useful listing terms such as "снять квартиру посуточно".
-    return text, budget, days
+    return text, budget, days, requested_city
 
 
-async def run_kufar_search(update: Update, query: str, max_budget=None, duration_days=None):
+async def run_kufar_search(update: Update, query: str, max_budget=None, duration_days=None, requested_city=None):
     if not query:
         await update.effective_message.reply_text(
             "Напиши, что нужно найти. Например: «сними квартиру посуточно до 250 BYN на два дня»."
         )
         return
 
+    search_query = " ".join(part for part in (query, requested_city) if part)
     search_url = (
         "https://www.kufar.by/listings?query="
-        + quote_plus(query)
+        + quote_plus(search_query)
         + "&rgn=all"
     )
     budget_note = ""
@@ -486,7 +506,7 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
         else:
             budget_note = f" Бюджет до {max_budget:g} BYN."
     progress = await update.effective_message.reply_text(
-        f"🔎 Ищу «{query}» на всём Kufar по Беларуси.{budget_note}"
+        f"🔎 Ищу «{query}»" + (f" в городе {requested_city}" if requested_city else " по всей Беларуси") + f".{budget_note}"
     )
     try:
         results = await asyncio.to_thread(fetch_kufar_page, search_url)
@@ -517,6 +537,12 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
                 price = kufar_price(meta)
                 city = kufar_city(meta)
                 checked += 1
+
+                # If a city was explicitly requested, never show listings from another city
+                # or listings whose location could not be established from the public page.
+                if requested_city and city != requested_city:
+                    skipped += 1
+                    continue
 
                 if daily_limit is not None:
                     amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price or "")
@@ -580,19 +606,19 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
 
 async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_query = " ".join(context.args).strip()
-    query, budget, days = parse_natural_search(raw_query)
-    await run_kufar_search(update, query, budget, days)
+    query, budget, days, city = parse_natural_search(raw_query)
+    await run_kufar_search(update, query, budget, days, city)
 
 
 async def natural_language_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     if not message or not message.text:
         return
-    query, budget, days = parse_natural_search(message.text)
+    query, budget, days, city = parse_natural_search(message.text)
     if not query:
         await message.reply_text("Напиши, что нужно найти на Kufar.")
         return
-    await run_kufar_search(update, query, budget, days)
+    await run_kufar_search(update, query, budget, days, city)
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
