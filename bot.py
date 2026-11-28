@@ -201,13 +201,15 @@ async def send_item(bot, item):
 
 def feed_error_context(raw, exc):
     line = getattr(exc, "getLineNumber", lambda: 0)()
-    column = getattr(exc, "getColumnNumber", lambda: 0)()
     lines = raw.decode("utf-8", errors="replace").splitlines()
     if not line or line > len(lines):
         return ""
-    source_line = lines[line - 1]
-    return clean_text(source_line[max(0, column - 70):column + 100])[:180]
-
+    first = max(1, line - 1)
+    last = min(len(lines), line + 1)
+    return " | ".join(
+        f"L{number}: {lines[number - 1][:240]!r}"
+        for number in range(first, last + 1)
+    )[:650]
 
 async def check_feeds(bot):
     global last_check_stats
