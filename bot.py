@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import quote_plus, urlsplit, urlunsplit
@@ -437,6 +438,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status — настройки бота\n"
         "/check — проверить RSS-источники\n"
         "/search <запрос> — найти на Kufar по всей Беларуси\n"
+        "/testkufar — проверить получение данных Kufar\n"
         "Пример: /search Stone Island Off Dye\n"
         "/help — список команд"
     )
