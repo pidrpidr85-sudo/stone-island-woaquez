@@ -9,10 +9,10 @@ import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import quote_plus, urlsplit, urlunsplit
+from urllib.parse import quote_plus, urlencode, urlsplit, urlunsplit
 
 import feedparser
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update, WebAppInfo)
 from telegram.constants import ChatType
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
@@ -31,6 +31,7 @@ KUFAR_MAX_CHECKS = min(20, max(1, int(os.getenv("KUFAR_MAX_CHECKS", "15"))))
 KUFAR_MAX_RESULTS = min(20, max(1, int(os.getenv("KUFAR_MAX_RESULTS", "10"))))
 KUFAR_CONCURRENCY = min(3, max(1, int(os.getenv("KUFAR_CONCURRENCY", "3"))))
 KUFAR_FETCH_ATTEMPTS = 2
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://pidrpidr85-sudo.github.io/stone-island-woaquez/").strip()
 SUBSCRIBERS_FILE = Path(os.getenv("SUBSCRIBERS_FILE", "subscribers.json"))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", "seen.json"))
 
@@ -271,6 +272,25 @@ async def check_feeds(bot):
         return found
 
 
+def favorite_app_url(item):
+    """Build a compact Mini App URL that saves this Kufar listing on open."""
+    link = item.get("link", "")
+    match = re.search(r"/item/(\\d+)", urlsplit(link).path)
+    if not match:
+        return WEBAPP_URL
+    params = {
+        "save": match.group(1),
+        "title": str(item.get("title", "Объявление"))[:220],
+        "city": str(item.get("city") or "Город не указан")[:80],
+        "price": str(item.get("price") or "Цена не указана")[:50],
+        "link": link,
+    }
+    image = item.get("image")
+    if image and str(image).startswith("https://"):
+        params["image"] = str(image)[:500]
+    return WEBAPP_URL + "?" + urlencode(params)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type != ChatType.PRIVATE:
@@ -284,7 +304,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"(лимит {MAX_EUR:.0f} €).\n\n"
         "Чтобы искать на Kufar, просто напиши запрос обычным сообщением — команды не нужны.\n"
         "Например: «Сними квартиру посуточно до 250 BYN на два дня».\n\n"
-        "Команды: /status, /check, /stop, /help."
+        "Команды: /status, /check, /stop, /help.",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("❤️ Избранное", web_app=WebAppInfo(url=WEBAPP_URL))]],
+            resize_keyboard=True,
+            is_persistent=True,
+        ),
     )
 
 
@@ -746,9 +771,18 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
                     f"🗓 {duration_days} дн. · бюджет до {max_budget:g} BYN всего"
                 )
             caption = "\n\n".join(caption_parts)
-            keyboard = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Открыть объявление на Kufar", url=link)]]
-            )
+            keyboard_rows = []
+            if WEBAPP_URL.startswith("https://"):
+                keyboard_rows.append([
+                    InlineKeyboardButton(
+                        "❤️ В избранное",
+                        web_app=WebAppInfo(url=favorite_app_url(item)),
+                    )
+                ])
+            keyboard_rows.append([
+                InlineKeyboardButton("Открыть объявление на Kufar", url=link)
+            ])
+            keyboard = InlineKeyboardMarkup(keyboard_rows)
             if image_url and image_url.startswith(("https://", "http://")):
                 try:
                     await update.effective_message.reply_photo(
