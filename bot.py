@@ -26,10 +26,11 @@ TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 MAX_EUR = float(os.getenv("MAX_PRICE_EUR", "100"))
 CHECK_INTERVAL = max(60, int(os.getenv("POLL_SECONDS", "600")))
 REQUEST_TIMEOUT = max(5, int(os.getenv("RSS_TIMEOUT_SECONDS", "20")))
-KUFAR_MAX_CHECKS = min(100, max(1, int(os.getenv("KUFAR_MAX_CHECKS", "30"))))
+KUFAR_REQUEST_TIMEOUT = 12
+KUFAR_MAX_CHECKS = min(20, max(1, int(os.getenv("KUFAR_MAX_CHECKS", "15"))))
 KUFAR_MAX_RESULTS = min(20, max(1, int(os.getenv("KUFAR_MAX_RESULTS", "10"))))
-KUFAR_CONCURRENCY = min(4, max(1, int(os.getenv("KUFAR_CONCURRENCY", "2"))))
-KUFAR_FETCH_ATTEMPTS = 3
+KUFAR_CONCURRENCY = min(3, max(1, int(os.getenv("KUFAR_CONCURRENCY", "3"))))
+KUFAR_FETCH_ATTEMPTS = 2
 SUBSCRIBERS_FILE = Path(os.getenv("SUBSCRIBERS_FILE", "subscribers.json"))
 SEEN_FILE = Path(os.getenv("SEEN_FILE", "seen.json"))
 
@@ -362,7 +363,7 @@ def fetch_kufar_page(url):
             "Accept-Language": "ru,en;q=0.8",
         },
     )
-    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+    with urllib.request.urlopen(request, timeout=KUFAR_REQUEST_TIMEOUT) as response:
         raw = response.read(2_000_000)
         page = raw.decode("utf-8", errors="replace")
         parser = KufarMetaParser()
@@ -681,9 +682,25 @@ async def run_kufar_search(update: Update, query: str, max_budget=None, duration
 
         links_to_check = links[:KUFAR_MAX_CHECKS]
         semaphore = asyncio.Semaphore(KUFAR_CONCURRENCY)
-        inspected = await asyncio.gather(
-            *(inspect_listing(link, semaphore) for link in links_to_check)
-        )
+        inspected = []
+        tasks = [
+            asyncio.create_task(inspect_listing(link, semaphore))
+            for link in links_to_check
+        ]
+        try:
+            for completed_count, task in enumerate(asyncio.as_completed(tasks), start=1):
+                inspected.append(await task)
+                if completed_count == len(tasks) or completed_count % 3 == 0:
+                    await progress.edit_text(
+                        f"🔎 Нашёл {len(links)} объявлений. "
+                        f"Проверяю карточки: {completed_count}/{len(tasks)}..."
+                    )
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
         fetch_errors = sum(1 for item in inspected if item.get("error"))
         checked = len(inspected) - fetch_errors
 
