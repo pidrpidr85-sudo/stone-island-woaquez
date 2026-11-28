@@ -319,7 +319,8 @@
   const params = new URLSearchParams(location.search);
   const id = params.get("save");
   (async () => {
-    profile = await getProfile();\n    items = await readAll();
+    profile = await getProfile();
+    items = await readAll();
     if (id && /^\d+$/.test(id)) {
       const item = {id, title:params.get("title") || "Объявление Kufar", city:params.get("city") || "Город не указан", price:params.get("price") || "Цена не указана", link:params.get("link") || ("https://www.kufar.by/item/" + id), image:params.get("image") || "", savedAt:Date.now()};
       if (/^https:\/\/www\.kufar\.by\/item\/\d+$/.test(item.link)) {
