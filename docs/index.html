@@ -45,7 +45,7 @@
     .empty small{display:block;margin-top:14px;color:#778171;font-size:11px}
     .toast{position:sticky;top:calc(8px + env(safe-area-inset-top));z-index:5;margin:0 0 12px;padding:11px 13px;border:1px solid #586b39;border-radius:11px;background:#202b19;color:var(--accent2);font-size:12px;font-weight:700}
 
-    .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:17px 0 20px}
+    .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:17px 0 20px}
     .tab{border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--muted);padding:11px 6px;font-size:12px;font-weight:800}
     .tab.active{background:#28321e;border-color:#637b3e;color:var(--accent)}
     .panel[hidden]{display:none}
@@ -96,6 +96,7 @@
       <button class="tab active" data-tab="favorites">🏝️ Избранное</button>
       <button class="tab" data-tab="perks">✦ Привилегии</button>
       <button class="tab" data-tab="games">🎮 Игры</button>
+      <button class="tab" data-tab="cases">🎁 Кейсы</button>
     </nav>
     <section id="favoritesPanel" class="panel">
     <div class="toolbar">
@@ -115,6 +116,16 @@
       </div>
       <div class="section-line"><span>Твои привилегии</span><span id="badgeCount">0 / 4</span></div>
       <div class="perk-list" id="perkList"></div>
+    </section>
+    <section id="casesPanel" class="panel" hidden>
+      <div class="game-card"><div class="eyebrow">WOAQUEZ GIFT ROOM</div><div class="rank">Коллекция подарков 🎁</div><div class="muted">Бесплатные виртуальные кейсы. Один кейс каждого типа в день. Предметы остаются в Mini App и не являются настоящими Telegram Gifts.</div></div>
+      <div class="case-grid">
+        <div class="case-tile"><div class="case-art">🎁</div><strong>Starter Case</strong><small>Первые подарки</small><button data-case="starter">Открыть бесплатно</button></div>
+        <div class="case-tile"><div class="case-art">💎</div><strong>Premium Case</strong><small>Коллекционные находки</small><button data-case="premium">Открыть бесплатно</button></div>
+        <div class="case-tile"><div class="case-art">👑</div><strong>WOAQUEZ Exclusive</strong><small>Особая серия</small><button data-case="exclusive">Открыть бесплатно</button></div>
+        <div class="case-tile"><div class="case-art">🌟</div><strong>Legendary Case</strong><small>Редкие трофеи</small><button data-case="legendary">Открыть бесплатно</button></div>
+      </div>
+      <div id="caseResult"></div><div class="section-line" style="margin-top:18px"><span>Моя коллекция</span><span id="giftCount">0 предметов</span></div><div class="gift-collection" id="giftCollection"></div>
     </section>
     <section id="gamesPanel" class="panel" hidden>
       <div class="game-card"><div class="eyebrow">WOAQUEZ ARCADE</div><div class="rank" style="margin:7px 0">Короткий перерыв 🎮</div><div class="muted">Играй ради удовольствия и собирай XP. Никаких ставок и покупок — только мини-игры.</div></div>
@@ -244,11 +255,12 @@
   };
   const switchTab = tab => {
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-    ["favorites","perks","games"].forEach(name => document.getElementById(name+"Panel").hidden = name !== tab);
-    const titles = {favorites:["Избранное.","Твоя личная коллекция находок."],perks:["Привилегии.","Повышай уровень и открывай новые статусы WOAQUEZ."],games:["Мини-игры.","Небольшие игры и XP — без ставок и покупок."]};
+    ["favorites","perks","games","cases"].forEach(name => document.getElementById(name+"Panel").hidden = name !== tab);
+    const titles = {favorites:["Избранное.","Твоя личная коллекция находок."],perks:["Привилегии.","Повышай уровень и открывай новые статусы WOAQUEZ."],games:["Мини-игры.","Небольшие игры и XP — без ставок и покупок."],cases:["Кейсы.","Открывай бесплатные виртуальные подарки WOAQUEZ."]};
     document.getElementById("pageTitle").textContent = titles[tab][0];
     document.getElementById("pageIntro").textContent = titles[tab][1];
     if (tab === "perks") updatePerks();
+    if (tab === "cases") renderGifts();
   };
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
   const today = () => new Date().toISOString().slice(0,10);
@@ -261,6 +273,40 @@
     updatePerks();
     return true;
   };
+  const caseCatalog = {
+    starter:{name:"Starter Case",items:[["🧢","WOAQUEZ Cap","Обычный"],["🧥","Street Hoodie","Обычный"],["👟","Sneaker Tag","Необычный"],["🪙","Logo Coin","Обычный"]]},
+    premium:{name:"Premium Case",items:[["💎","Crystal Badge","Редкий"],["🕶️","Night Glasses","Редкий"],["⌚","Urban Watch","Эпический"],["🎧","Sound Wave","Необычный"]]},
+    exclusive:{name:"WOAQUEZ Exclusive",items:[["👑","Founder Crown","Особый"],["🏝️","Island Emblem","Эпический"],["🛡️","Elite Shield","Редкий"],["✨","Gold Signature","Особый"]]},
+    legendary:{name:"Legendary Case",items:[["🌟","Golden Star","Легендарный"],["🐉","Dragon Relic","Легендарный"],["💠","Diamond Mark","Эпический"],["🚀","Orbit Trophy","Легендарный"]]}
+  };
+  const renderGifts = () => {
+    const collection = Array.isArray(profile.gifts) ? profile.gifts : [];
+    document.getElementById("giftCount").textContent = collection.length + " предметов";
+    document.getElementById("giftCollection").innerHTML = collection.length ? collection.slice().reverse().map(g => '<div class="gift-item"><span>'+g.emoji+'</span><strong>'+g.name+'</strong><small>'+g.rarity+'</small></div>').join("") : '<div class="muted" style="grid-column:1/-1;text-align:center;padding:18px">Пока пусто — открой свой первый кейс.</div>';
+    document.querySelectorAll("[data-case]").forEach(button => {
+      const key = button.dataset.case;
+      const used = profile.caseOpens && profile.caseOpens[today()] && profile.caseOpens[today()].includes(key);
+      button.disabled = !!used;
+      button.textContent = used ? "Уже открыт сегодня" : "Открыть бесплатно";
+    });
+  };
+  document.querySelectorAll("[data-case]").forEach(button => button.addEventListener("click", async () => {
+    const key = button.dataset.case;
+    const def = caseCatalog[key];
+    if (!def) return;
+    if (!profile.caseOpens || typeof profile.caseOpens !== "object") profile.caseOpens = {};
+    if (!profile.caseOpens[today()]) profile.caseOpens[today()] = [];
+    if (profile.caseOpens[today()].includes(key)) return;
+    const chosen = def.items[Math.floor(Math.random() * def.items.length)];
+    const gift = {emoji:chosen[0],name:chosen[1],rarity:chosen[2],caseName:def.name,openedAt:Date.now()};
+    profile.caseOpens[today()].push(key);
+    if (!Array.isArray(profile.gifts)) profile.gifts = [];
+    profile.gifts.push(gift);
+    await saveProfile();
+    document.getElementById("caseResult").innerHTML = '<div class="gift-result"><div class="eyebrow">'+def.name.toUpperCase()+'</div><div class="gift-emoji">'+gift.emoji+'</div><strong>'+gift.name+'</strong><div class="muted" style="margin-top:6px">'+gift.rarity+' · Добавлено в коллекцию</div></div>';
+    renderGifts();
+    try { if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success"); } catch (_) {}
+  }));
   const gameArea = document.getElementById("gameArea");
   const memoryStart = () => {
     const symbols = ["🧥","👟","🧢"];
