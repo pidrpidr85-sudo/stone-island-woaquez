@@ -207,11 +207,13 @@ async def check_feeds(bot):
 
     async with check_lock:
         found = 0
-        stats = {"feeds": len(FEED_URLS), "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0}
+        stats = {"feeds": len(FEED_URLS), "entries": 0, "brand": 0, "price": 0, "under_limit": 0, "duplicates": 0, "errors": 0, "feed_info": []}
         for url in FEED_URLS:
             try:
                 raw = await asyncio.to_thread(download_feed, url)
                 parsed = feedparser.parse(raw)
+                info = {"bytes": len(raw), "title": clean_text(parsed.feed.get("title", ""))[:100], "bozo": str(parsed.bozo_exception)[:180] if parsed.bozo else ""}
+                stats["feed_info"].append(info)
                 if parsed.bozo:
                     logger.warning("RSS вернул предупреждение для %s: %s", url, parsed.bozo_exception)
 
@@ -300,6 +302,12 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    f"\nДо 100 €: {stats.get('under_limit', 0)}"
                    f"\nУже встречались: {stats.get('duplicates', 0)}"
                    f"\nОшибок источника: {stats.get('errors', 0)}")
+        for info in stats.get("feed_info", []):
+            details += f"\nРазмер ответа: {info.get('bytes', 0)} байт"
+            if info.get("title"):
+                details += f"\nНазвание ленты: {info['title']}"
+            if info.get("bozo"):
+                details += f"\nПредупреждение RSS: {info['bozo']}"
         await message.edit_text(f"✅ Проверка завершена. Новых объявлений отправлено: {found}.{details}")
     except asyncio.TimeoutError:
         await message.edit_text("⌛ Проверка не уложилась в 120 секунд. Посмотри логи Railway.")
