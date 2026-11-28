@@ -425,10 +425,36 @@ def kufar_price(meta):
 
 
 async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = " ".join(context.args).strip()
+    raw_query = " ".join(context.args).strip()
+    if not raw_query:
+        await update.effective_message.reply_text(
+            "Напиши, что искать и при необходимости максимальную цену.\n"
+            "Примеры:\n"
+            "/search снять квартиру до 500 BYN\n"
+            "/search BMW E60 до 8000\n"
+            "/search iPhone 15 до 1500"
+        )
+        return
+
+    max_match = re.search(
+        r"\bдо\s*([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\b",
+        raw_query,
+        re.IGNORECASE,
+    )
+    max_price = None
+    query = raw_query
+    if max_match:
+        try:
+            max_price = float(re.sub(r"\s+", "", max_match.group(1)).replace(",", "."))
+            query = (raw_query[:max_match.start()] + raw_query[max_match.end():]).strip()
+            query = re.sub(r"\s+", " ", query)
+        except ValueError:
+            max_price = None
+            query = raw_query
+
     if not query:
         await update.effective_message.reply_text(
-            "Напиши, что искать. Пример: /search Stone Island Off Dye"
+            "Добавь, что именно искать. Например: /search снять квартиру до 500 BYN"
         )
         return
 
@@ -437,30 +463,46 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + quote_plus(query)
         + "&rgn=all"
     )
+    limit_text = f", максимум {max_price:g} BYN" if max_price is not None else ""
     progress = await update.effective_message.reply_text(
-        f"🔎 Ищу «{query}» на Kufar по всей Беларуси..."
+        f"🔎 Ищу «{query}» на всём Kufar по Беларуси{limit_text}..."
     )
     try:
         results = await asyncio.to_thread(fetch_kufar_page, search_url)
         links = results.get("item_links", [])
         if not links:
             await progress.edit_text(
-                "Не удалось найти ссылки на отдельные объявления в HTML результатов.\n"
+                "Не удалось найти ссылки на отдельные объявления в результатах.\n"
                 f"Открой поиск вручную: {search_url}"
             )
             return
 
         sent = 0
-        for link in links[:10]:
+        checked = 0
+        price_skipped = 0
+        for link in links[:30]:
+            if sent >= 10:
+                break
             try:
                 page = await asyncio.to_thread(fetch_kufar_page, link)
                 meta = page.get("meta", {})
                 title = meta.get("og:title") or meta.get("twitter:title") or "Объявление Kufar"
-                description = meta.get("og:description", "")
                 image_url = meta.get("og:image")
                 price = kufar_price(meta)
                 city = kufar_city(meta)
-                caption_parts = [f"🧥 {title[:220]}"]
+                checked += 1
+
+                if max_price is not None:
+                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price or "")
+                    if not amount_match:
+                        price_skipped += 1
+                        continue
+                    amount = float(amount_match.group(1).replace(",", "."))
+                    if amount > max_price:
+                        price_skipped += 1
+                        continue
+
+                caption_parts = [f"📌 {title[:220]}"]
                 caption_parts.append(f"📍 {city or 'Город не указан'}")
                 caption_parts.append(f"💰 {price or 'Цена не указана'}")
                 caption = "\n\n".join(caption_parts)
@@ -487,18 +529,21 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logger.exception("Не удалось получить объявление Kufar: %s", link)
 
-        await progress.edit_text(
-            f"✅ Поиск завершён. Карточек отправлено: {sent}.\n"
-            f"Найдено ссылок: {len(links)}.\n"
-            f"Все результаты: {search_url}"
+        summary = (
+            f"✅ Поиск завершён.\n"
+            f"Карточек отправлено: {sent}.\n"
+            f"Объявлений проверено: {checked} из {len(links)} найденных ссылок."
         )
+        if max_price is not None:
+            summary += f"\nОтсеяно по цене или без цены: {price_skipped}."
+        summary += f"\nВсе результаты: {search_url}"
+        await progress.edit_text(summary)
     except Exception as exc:
         logger.exception("Ошибка поиска Kufar")
         await progress.edit_text(
             f"❌ Не удалось обработать поиск Kufar: {type(exc).__name__}: {str(exc)[:180]}\n"
             f"Ссылка: {search_url}"
         )
-
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
