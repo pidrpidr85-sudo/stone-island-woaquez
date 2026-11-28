@@ -428,44 +428,31 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_query = " ".join(context.args).strip()
     if not raw_query:
         await update.effective_message.reply_text(
-            "Напиши, что искать и при необходимости максимальную цену.\n"
+            "Напиши, что искать.\n"
             "Примеры:\n"
-            "/search снять квартиру до 500 BYN\n"
-            "/search BMW E60 до 8000\n"
-            "/search iPhone 15 до 1500"
+            "/search снять квартиру\n"
+            "/search BMW E60\n"
+            "/search iPhone 15"
         )
         return
 
-    max_match = re.search(
-        r"\bдо\s*([0-9][0-9\s]*(?:[.,][0-9]{1,2})?)\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\b",
+    # Ignore any optional price phrase: search listings at every price.
+    query = re.sub(
+        r"\s+\bдо\s*[0-9][0-9\s]*(?:[.,][0-9]{1,2})?\s*(?:BYN|б\.?\s*р\.?|р\.?|руб(?:лей|ля)?)?\s*$",
+        "",
         raw_query,
-        re.IGNORECASE,
-    )
-    max_price = None
-    query = raw_query
-    if max_match:
-        try:
-            max_price = float(re.sub(r"\s+", "", max_match.group(1)).replace(",", "."))
-            query = (raw_query[:max_match.start()] + raw_query[max_match.end():]).strip()
-            query = re.sub(r"\s+", " ", query)
-        except ValueError:
-            max_price = None
-            query = raw_query
-
+        flags=re.IGNORECASE,
+    ).strip()
     if not query:
-        await update.effective_message.reply_text(
-            "Добавь, что именно искать. Например: /search снять квартиру до 500 BYN"
-        )
-        return
+        query = raw_query
 
     search_url = (
         "https://www.kufar.by/listings?query="
         + quote_plus(query)
         + "&rgn=all"
     )
-    limit_text = f", максимум {max_price:g} BYN" if max_price is not None else ""
     progress = await update.effective_message.reply_text(
-        f"🔎 Ищу «{query}» на всём Kufar по Беларуси{limit_text}..."
+        f"🔎 Ищу «{query}» на всём Kufar по Беларуси — без ограничения цены..."
     )
     try:
         results = await asyncio.to_thread(fetch_kufar_page, search_url)
@@ -479,7 +466,6 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sent = 0
         checked = 0
-        price_skipped = 0
         for link in links[:30]:
             if sent >= 10:
                 break
@@ -491,16 +477,6 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 price = kufar_price(meta)
                 city = kufar_city(meta)
                 checked += 1
-
-                if max_price is not None:
-                    amount_match = re.search(r"([0-9]+(?:[.,][0-9]{1,2})?)", price or "")
-                    if not amount_match:
-                        price_skipped += 1
-                        continue
-                    amount = float(amount_match.group(1).replace(",", "."))
-                    if amount > max_price:
-                        price_skipped += 1
-                        continue
 
                 caption_parts = [f"📌 {title[:220]}"]
                 caption_parts.append(f"📍 {city or 'Город не указан'}")
@@ -529,15 +505,13 @@ async def search_kufar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logger.exception("Не удалось получить объявление Kufar: %s", link)
 
-        summary = (
+        await progress.edit_text(
             f"✅ Поиск завершён.\n"
             f"Карточек отправлено: {sent}.\n"
-            f"Объявлений проверено: {checked} из {len(links)} найденных ссылок."
+            f"Объявлений проверено: {checked} из {len(links)} найденных ссылок.\n"
+            f"Ограничения по цене нет.\n"
+            f"Все результаты: {search_url}"
         )
-        if max_price is not None:
-            summary += f"\nОтсеяно по цене или без цены: {price_skipped}."
-        summary += f"\nВсе результаты: {search_url}"
-        await progress.edit_text(summary)
     except Exception as exc:
         logger.exception("Ошибка поиска Kufar")
         await progress.edit_text(
